@@ -58,3 +58,26 @@ def builder_role(
     ]
     saved = persist_builder_assets(assets)
     return entries, saved
+def builder_role(*, query: str, graph_results: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return minimal structured entries for沉淀."""
+
+    entries: list[dict[str, Any]] = []
+    if graph_results:
+        answer_type = graph_results.get("answer_type", "none")
+        entries.append(
+            {
+                "type": "relationship_note",
+                "title": f"graph:{answer_type}",
+                "content": graph_results.get("results", {}),
+            }
+        )
+
+    entries.append(
+        {
+            "type": "open_question",
+            "title": "待确认问题",
+            "content": f"{query}（后续可补 canon 证据）",
+        }
+    )
+
+    return entries

@@ -59,6 +59,8 @@ def orchestrate_hidden_agents(
             graph_evidence=graph_evidence,
         )
         final_reply += "\n\n我还顺手整理了可沉淀条目，并已保存到 workbench draft 资产区。"
+        builder_entries = builder_role(query=query, graph_results=graph_results)
+        final_reply += "\n\n我还顺手整理了可沉淀条目（可选查看）。"
 
     return OrchestrationResult(
         final_reply=final_reply,
