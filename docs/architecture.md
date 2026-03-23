@@ -158,3 +158,15 @@
 4. 在 `src/story_agent_workbench/ingest/` 继续完善输入数据格式约定（txt/md 优先）
 
 这四步完成后，可进入“可验证最小检索闭环”阶段。
+
+
+## 8. 阶段 6 验证层（测试与样例）
+
+- 自动化测试目录：`tests/`（标准库 `unittest`）
+- 示例查询集：`examples/query_set.json`
+- 手动验收清单：`docs/manual_checklist.md`
+
+验证目标：
+- 关键路径可重复执行
+- 失败场景可复现
+- 新协作者可按文档完成最小验收

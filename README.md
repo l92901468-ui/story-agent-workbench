@@ -280,3 +280,32 @@ PYTHONPATH=src python -m story_agent_workbench "某个不存在实体的关系" 
 # 4) 非 evidence 模式，显式打开完整证据
 PYTHONPATH=src python -m story_agent_workbench "灰塔阵营相关人物" --mode critic --show-evidence
 ```
+
+## 阶段 6：测试与样例完善（可重复验证）
+
+本阶段目标：把“能跑”升级为“可重复验证”。
+
+### 自动化测试（unittest）
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+当前最小测试覆盖：
+- ingest loader
+- chunker
+- text retriever
+- graph retriever
+- router / strategy
+- fallback 行为
+- registry extraction
+
+### 固定示例查询集
+
+- 路径：`examples/query_set.json`
+- 覆盖：chat / feedback / critic / evidence / text retrieval / graph retrieval / weak hit fallback
+
+### 手动验收清单
+
+- 路径：`docs/manual_checklist.md`
+- 包含：命令、预期现象、通过标准
