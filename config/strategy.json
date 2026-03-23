@@ -1,0 +1,16 @@
+{
+  "route_graph_keywords": ["关系", "阵营", "全局", "链条", "关联", "谁和谁", "哪些人物"],
+  "route_text_keywords": ["原文", "句子", "改写", "措辞", "段落", "scene", "证据"],
+  "route_graph_threshold": 0.3,
+  "route_text_threshold": 0.2,
+  "auto_mode_enabled": true,
+  "mode_keywords": {
+    "feedback": ["建议", "改写", "优化", "怎么改"],
+    "critic": ["冲突", "矛盾", "不一致", "漏洞"],
+    "evidence": ["证据", "出处", "原文", "依据", "引用"]
+  },
+  "show_full_evidence_modes": ["evidence"],
+  "graph_conf_threshold": 0.45,
+  "text_conf_threshold": 0.35,
+  "low_confidence_threshold": 0.25
+}
