@@ -1,0 +1,10 @@
+[
+  {
+    "name": "demo_project quality summary",
+    "command": "PYTHONPATH=src python scripts/stage8b_project_quality_check.py --project-id demo_project --projects-root projects"
+  },
+  {
+    "name": "demo_project full JSON report",
+    "command": "PYTHONPATH=src python scripts/stage8b_project_quality_check.py --project-id demo_project --projects-root projects --json"
+  }
+]

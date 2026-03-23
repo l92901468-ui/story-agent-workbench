@@ -1,0 +1,68 @@
+{
+  "project_id": "demo_project",
+  "project_root": "projects/demo_project",
+  "documents": [
+    {
+      "source": "canon/chapter_01.md",
+      "layer": "canon",
+      "project_id": "demo_project",
+      "doc_type": "chapter",
+      "chapter": "01",
+      "scene": null,
+      "characters": [
+        "艾琳",
+        "罗安"
+      ],
+      "timeline_hint": "第三夜",
+      "text_length": 101,
+      "content_hash": "a86eb297eaa4b7ed0b2f0ae216e6a9144777fd26"
+    },
+    {
+      "source": "draft/scene_01.md",
+      "layer": "draft",
+      "project_id": "demo_project",
+      "doc_type": "scene",
+      "chapter": null,
+      "scene": "01",
+      "characters": [
+        "艾琳",
+        "罗安"
+      ],
+      "timeline_hint": "第四夜",
+      "text_length": 89,
+      "content_hash": "3ec52c77e606f0eb47e51cb7eb2632b3c47aeca1"
+    },
+    {
+      "source": "reference/world_notes.txt",
+      "layer": "reference",
+      "project_id": "demo_project",
+      "doc_type": "note",
+      "chapter": null,
+      "scene": null,
+      "characters": [
+        "灰塔观察员",
+        "码头工"
+      ],
+      "timeline_hint": "第五夜前",
+      "text_length": 54,
+      "content_hash": "1cbd018f84bafb7b29b39d3c993eca3d32444bae"
+    }
+  ],
+  "checks": {
+    "empty_documents": [],
+    "duplicate_filenames": [],
+    "duplicate_content": [],
+    "missing_layer": [],
+    "too_short": [],
+    "too_long": [],
+    "character_alias_conflicts": []
+  },
+  "stats": {
+    "total_docs": 3,
+    "by_layer": {
+      "canon": 1,
+      "draft": 1,
+      "reference": 1
+    }
+  }
+}

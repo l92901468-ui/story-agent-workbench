@@ -1,0 +1,8 @@
+[
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --project-id demo_project --projects-root projects chat \"先帮我顺一下这一章冲突线\"",
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --projects-root projects check --top 3",
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --projects-root projects build \"请整理这轮可沉淀条目\"",
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --projects-root projects review --do list --status draft",
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --projects-root projects review --do approve --asset-path <draft_asset_path> --note \"可发布\"",
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --projects-root projects review --do publish --asset-path <approved_asset_path>"
+]
