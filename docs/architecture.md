@@ -86,6 +86,21 @@
   - 后台按需调用多角色
   - 可通过 `agents_called` 观察本轮编排
 
+### 3.2.9 结构化沉淀层（阶段 7B）
+- 路径：
+  - `src/story_agent_workbench/orchestrator/assets.py`
+  - `src/story_agent_workbench/orchestrator/roles.py`（builder）
+- 职责：
+  - 定义 builder 资产最小 schema
+  - 将本轮沉淀条目写入本地 draft 资产目录（JSON）
+- 当前支持类型：
+  - character_card / relationship_card / event_card / open_question / foreshadowing_item / gameplay_hook
+- 默认保存根目录：
+  - `data/workbench/draft/`
+- 约束：
+  - 仅写 draft 资产，不覆盖 canon
+  - 不接数据库，不做 UI
+
 ### 3.3 文本检索模块
 - 路径：`src/story_agent_workbench/retrieval/text_retriever.py`
 - 职责：

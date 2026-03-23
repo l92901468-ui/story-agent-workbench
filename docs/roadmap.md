@@ -179,6 +179,11 @@
 #### 目标
 - 在 7A 稳定后再考虑更重能力。
 
+#### 具体任务（当前先做最小结构化沉淀层）
+1. 定义 builder 资产最小 schema（character_card / relationship_card / event_card / open_question / foreshadowing_item / gameplay_hook）。
+2. 把 builder 结果落盘到本地 `data/workbench/draft/*` 目录（JSON）。
+3. 资产包含最小元数据（source_query / reference_sources / generated_at）。
+4. 增加最小测试与示例命令，确保可重复验证。
 #### 具体任务（后续）
 1. 更复杂多角色协作协议。
 2. 真正 GraphRAG 深度推理。
@@ -187,6 +192,7 @@
 #### 暂时不做什么
 - 不引入复杂多 agent 框架。
 - 不在当前阶段做前台角色群聊 UI。
+- 不接数据库，不实现完整 GraphRAG。
 
 ---
 
@@ -210,4 +216,5 @@
 - 阶段 5：已完成
 - 阶段 6：已完成
 - 阶段 7A：进行中
+- 阶段 7B：进行中（最小结构化沉淀层）
 - 阶段 7B：未开始

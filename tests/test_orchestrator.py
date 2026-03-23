@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from story_agent_workbench.orchestrator.orchestrator import orchestrate_hidden_agents
 
@@ -38,6 +39,11 @@ class TestOrchestrator(unittest.TestCase):
         )
         self.assertIn("systems_designer", out.agents_called)
 
+    @patch("story_agent_workbench.orchestrator.roles.persist_builder_assets")
+    def test_builder_trigger_by_keyword(self, mock_persist) -> None:
+        mock_persist.return_value = [
+            {"type": "character_card", "title": "艾琳 角色卡", "path": "data/workbench/draft/characters/demo.json"}
+        ]
     def test_builder_trigger_by_keyword(self) -> None:
         out = orchestrate_hidden_agents(
             query="请帮我整理成结构化条目",
@@ -49,6 +55,18 @@ class TestOrchestrator(unittest.TestCase):
         )
         self.assertIn("builder", out.agents_called)
         self.assertGreaterEqual(len(out.builder_entries), 1)
+        self.assertGreaterEqual(len(out.builder_saved_assets), 1)
+        for entry in out.builder_entries:
+            self.assertIn("type", entry)
+            self.assertIn("title", entry)
+            self.assertIn("summary", entry)
+            self.assertIn("source_query", entry)
+
+    @patch("story_agent_workbench.orchestrator.roles.persist_builder_assets")
+    def test_builder_trigger_in_evidence_mode(self, mock_persist) -> None:
+        mock_persist.return_value = [
+            {"type": "open_question", "title": "待确认问题", "path": "data/workbench/draft/open_questions/demo.json"}
+        ]
         for entry in out.builder_entries:
             self.assertIn("type", entry)
             self.assertIn("title", entry)

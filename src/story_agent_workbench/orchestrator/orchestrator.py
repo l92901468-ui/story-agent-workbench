@@ -17,6 +17,7 @@ class OrchestrationResult:
     final_reply: str
     agents_called: list[str]
     builder_entries: list[dict[str, Any]]
+    builder_saved_assets: list[dict[str, Any]]
 
 
 def orchestrate_hidden_agents(
@@ -33,6 +34,7 @@ def orchestrate_hidden_agents(
     agents_called: list[str] = ["orchestrator", "story_buddy"]
     final_reply = story_buddy_role(base_reply=base_reply)
     builder_entries: list[dict[str, Any]] = []
+    builder_saved_assets: list[dict[str, Any]] = []
 
     needs_critic = mode == "critic" or any(k in query for k in CRITIC_HINTS)
     needs_systems = any(k in query for k in SYSTEMS_HINTS)
@@ -50,6 +52,13 @@ def orchestrate_hidden_agents(
 
     if needs_builder:
         agents_called.append("builder")
+        builder_entries, builder_saved_assets = builder_role(
+            query=query,
+            graph_results=graph_results,
+            text_evidence=text_evidence,
+            graph_evidence=graph_evidence,
+        )
+        final_reply += "\n\n我还顺手整理了可沉淀条目，并已保存到 workbench draft 资产区。"
         builder_entries = builder_role(query=query, graph_results=graph_results)
         final_reply += "\n\n我还顺手整理了可沉淀条目（可选查看）。"
 
@@ -57,4 +66,5 @@ def orchestrate_hidden_agents(
         final_reply=final_reply,
         agents_called=agents_called,
         builder_entries=builder_entries,
+        builder_saved_assets=builder_saved_assets,
     )

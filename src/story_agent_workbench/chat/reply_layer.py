@@ -282,6 +282,7 @@ def generate_reply(
         "reply": reply_text,
         "agents_called": orchestration.agents_called,
         "builder_entries": orchestration.builder_entries,
+        "builder_saved_assets": orchestration.builder_saved_assets,
     }
 
     if text_retrieval:

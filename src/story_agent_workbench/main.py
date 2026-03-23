@@ -87,6 +87,10 @@ def format_human_output(payload: dict[str, Any]) -> str:
         lines.append("\n--- builder entries (optional) ---")
         for item in response["builder_entries"][:3]:
             lines.append(f"[{item.get('type')}] {item.get('title')}")
+    if response.get("builder_saved_assets"):
+        lines.append("\n--- builder assets saved ---")
+        for item in response["builder_saved_assets"][:5]:
+            lines.append(f"[{item.get('type')}] {item.get('path')}")
 
     return "\n".join(lines)
 

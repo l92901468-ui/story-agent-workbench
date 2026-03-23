@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .assets import build_builder_assets, persist_builder_assets
+
 
 def story_buddy_role(*, base_reply: str) -> str:
     """Default companion tone: follow user's narrative flow without over-prescribing."""
@@ -26,6 +28,36 @@ def systems_designer_role(*, query: str) -> str:
     )
 
 
+def builder_role(
+    *,
+    query: str,
+    graph_results: dict[str, Any] | None,
+    text_evidence: list[str],
+    graph_evidence: list[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return and persist stage-7B structured draft assets for沉淀."""
+
+    assets = build_builder_assets(
+        query=query,
+        graph_results=graph_results,
+        text_evidence=text_evidence,
+        graph_evidence=graph_evidence,
+    )
+    entries = [
+        {
+            "type": asset.type,
+            "title": asset.title,
+            "summary": asset.summary,
+            "source_query": asset.source_query,
+            "reference_sources": asset.reference_sources,
+            "generated_at": asset.generated_at,
+            "generation_tag": asset.generation_tag,
+            "metadata": asset.metadata,
+        }
+        for asset in assets
+    ]
+    saved = persist_builder_assets(assets)
+    return entries, saved
 def builder_role(*, query: str, graph_results: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Return minimal structured entries for沉淀."""
 
