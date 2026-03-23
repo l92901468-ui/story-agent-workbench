@@ -20,3 +20,9 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
+# Python cache
+__pycache__/
+*.pyc
+
+# Local chat session memory
+.story_agent_sessions/
