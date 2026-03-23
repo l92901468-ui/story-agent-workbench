@@ -594,3 +594,54 @@ PYTHONPATH=src python scripts/stage8c_project_session.py --project-id demo_proje
 ```bash
 cat examples/project_session_commands.json
 ```
+
+## 阶段 8D：项目文件夹直导（面向无基础用户）
+
+目标：用户只需要准备一个项目目录，放入原始文档，然后跑一条命令。
+
+### 推荐目录
+
+```text
+<project_root>/
+  incoming/
+  canon/
+  draft/
+  reference/
+  .workbench/
+    chunks/
+    summaries/
+    graph/
+    assets/
+    review/
+    published/
+    quality/
+    cache/
+    logs/
+```
+
+### 一条命令导入
+
+```bash
+PYTHONPATH=src python scripts/stage8c_folder_import.py --project-root projects/my_story_project
+```
+
+系统会自动完成：
+- 扫描 `incoming/canon/draft/reference`（txt/md 优先）
+- 自动分类 `incoming/` 文档（并给出分类原因）
+- 自动切分并写入 `.workbench/chunks/chunks.jsonl`
+- 生成最小 summaries / graph seed / import report
+- 自动忽略 `.workbench/`、`published/`、`cache/`、`logs/` 等系统目录
+
+### 输出报告
+
+导入后可查看：
+- `.workbench/logs/import_report.json`
+
+报告包含：
+- 扫描文件数
+- 自动分类数量
+- chunk 总数
+- 跳过文件及原因
+- 明显问题（空文档、过短文本、未生成 chunk）
+
+> 建议：`.workbench/` 是系统目录，除排障外不要手动编辑。

@@ -270,3 +270,21 @@
 - 关键路径可重复执行
 - 失败场景可复现
 - 新协作者可按文档完成最小验收
+
+### 3.10 项目文件夹直导（阶段 8D）
+- 路径：
+  - `src/story_agent_workbench/ingest/folder_import.py`
+  - `scripts/stage8c_folder_import.py`
+- 目录语义：
+  - 用户输入层：`incoming/canon/draft/reference`
+  - 系统输出层：`.workbench/*`
+- 职责：
+  - 自动补齐缺失目录
+  - 自动扫描并忽略系统目录
+  - 对 `incoming` 做最小可解释分类
+  - 分层切分（标题/对话块/段落优先，最后固定长度回退）
+  - 写入 chunks/summaries/graph seed/import report
+- 与现有模块接入：
+  - `text_retriever` 优先读取 `.workbench/chunks/chunks.jsonl`
+  - `graph_retriever` 可读取 `.workbench/graph/registry_seed.json`
+  - `project_quality` 会复用 `.workbench/logs/import_report.json`

@@ -29,6 +29,7 @@ from story_agent_workbench.strategy import load_strategy_config
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Stage-8C unified project session")
     parser.add_argument("--project-id", default=None, help="Project id (remembered in session file)")
+    parser.add_argument("--project-root", default=None, help="Direct project root path")
     parser.add_argument("--projects-root", default="projects", help="Projects root directory")
     parser.add_argument("--session-file", default=".project_session.json", help="Session binding file")
     parser.add_argument("--json", action="store_true", help="Print full JSON")
@@ -58,20 +59,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _resolve_project_binding(project_id: str | None, projects_root: str, session_file: Path) -> tuple[str, Path]:
-    if project_id:
-        payload = {"project_id": project_id, "projects_root": projects_root}
+def _resolve_project_binding(
+    project_id: str | None,
+    project_root: str | None,
+    projects_root: str,
+    session_file: Path,
+) -> tuple[str, Path, Path | None]:
+    if project_root:
+        root = Path(project_root)
+        effective_id = project_id or root.name
+        payload = {"project_id": effective_id, "projects_root": projects_root, "project_root": str(root)}
         session_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return project_id, Path(projects_root)
+        return effective_id, Path(projects_root), root
+
+    if project_id:
+        payload = {"project_id": project_id, "projects_root": projects_root, "project_root": None}
+        session_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return project_id, Path(projects_root), None
 
     if session_file.exists():
         payload = json.loads(session_file.read_text(encoding="utf-8"))
         bound = str(payload.get("project_id", "")).strip()
         root = str(payload.get("projects_root", projects_root))
+        bound_root = payload.get("project_root")
         if bound:
-            return bound, Path(root)
+            return bound, Path(root), Path(bound_root) if bound_root else None
 
-    raise ValueError("project_id is required for first run. Use --project-id to bind session.")
+    raise ValueError("project_id or project_root is required for first run.")
 
 
 def _list_assets(workbench_root: Path, status_filter: str = "all") -> list[dict[str, Any]]:
@@ -98,11 +112,11 @@ def _list_assets(workbench_root: Path, status_filter: str = "all") -> list[dict[
     return assets
 
 
-def _run_chat_action(args: argparse.Namespace, project_id: str, projects_root: Path) -> dict[str, Any]:
+def _run_chat_action(args: argparse.Namespace, project_id: str, projects_root: Path, project_root: Path | None) -> dict[str, Any]:
     strategy = load_strategy_config()
     route = route_query(args.query, strategy=strategy)
-    retrieval_config = RetrievalConfig(project_id=project_id, projects_root=projects_root)
-    graph_config = GraphConfig(project_id=project_id, projects_root=projects_root)
+    retrieval_config = RetrievalConfig(project_id=project_id, project_root=project_root, projects_root=projects_root)
+    graph_config = GraphConfig(project_id=project_id, project_root=project_root, projects_root=projects_root)
     response = generate_reply(
         query=args.query,
         mode=args.mode,
@@ -122,19 +136,19 @@ def _run_chat_action(args: argparse.Namespace, project_id: str, projects_root: P
     }
 
 
-def _run_check_action(args: argparse.Namespace, project_id: str, projects_root: Path) -> dict[str, Any]:
-    report = run_project_quality_check(project_id=project_id, projects_root=projects_root)
+def _run_check_action(args: argparse.Namespace, project_id: str, projects_root: Path, project_root: Path | None) -> dict[str, Any]:
+    report = run_project_quality_check(project_id=project_id, project_root=project_root, projects_root=projects_root)
     issues = sorted(report["issues"], key=lambda x: float(x.get("confidence", 0.0)), reverse=True)
     report["issues"] = issues[: max(0, args.top)]
     report["issue_count"] = len(report["issues"])
     return {"action": "check", **report}
 
 
-def _run_build_action(args: argparse.Namespace, project_id: str, projects_root: Path) -> dict[str, Any]:
+def _run_build_action(args: argparse.Namespace, project_id: str, projects_root: Path, project_root: Path | None) -> dict[str, Any]:
     strategy = load_strategy_config()
     route = route_query(args.query, strategy=strategy)
-    retrieval_config = RetrievalConfig(project_id=project_id, projects_root=projects_root)
-    graph_config = GraphConfig(project_id=project_id, projects_root=projects_root)
+    retrieval_config = RetrievalConfig(project_id=project_id, project_root=project_root, projects_root=projects_root)
+    graph_config = GraphConfig(project_id=project_id, project_root=project_root, projects_root=projects_root)
     response = generate_reply(
         query=args.query,
         mode=args.mode,
@@ -154,8 +168,8 @@ def _run_build_action(args: argparse.Namespace, project_id: str, projects_root: 
     }
 
 
-def _run_review_action(args: argparse.Namespace, project_id: str, projects_root: Path) -> dict[str, Any]:
-    workbench = projects_root / project_id / "workbench"
+def _run_review_action(args: argparse.Namespace, project_id: str, projects_root: Path, project_root: Path | None) -> dict[str, Any]:
+    workbench = (project_root / ".workbench") if project_root else (projects_root / project_id / "workbench")
     if args.do == "list":
         items = _list_assets(workbench, status_filter=args.status)
         return {"action": "review", "project_id": project_id, "count": len(items), "assets": items}
@@ -175,20 +189,21 @@ def _run_review_action(args: argparse.Namespace, project_id: str, projects_root:
 
 def run_session(argv: list[str] | None = None) -> dict[str, Any]:
     args = build_parser().parse_args(argv)
-    project_id, projects_root = _resolve_project_binding(
+    project_id, projects_root, project_root = _resolve_project_binding(
         args.project_id,
+        args.project_root,
         args.projects_root,
         Path(args.session_file),
     )
 
     if args.action == "chat":
-        return _run_chat_action(args, project_id, projects_root)
+        return _run_chat_action(args, project_id, projects_root, project_root)
     if args.action == "check":
-        return _run_check_action(args, project_id, projects_root)
+        return _run_check_action(args, project_id, projects_root, project_root)
     if args.action == "build":
-        return _run_build_action(args, project_id, projects_root)
+        return _run_build_action(args, project_id, projects_root, project_root)
     if args.action == "review":
-        return _run_review_action(args, project_id, projects_root)
+        return _run_review_action(args, project_id, projects_root, project_root)
     raise ValueError(f"unsupported action: {args.action}")
 
 

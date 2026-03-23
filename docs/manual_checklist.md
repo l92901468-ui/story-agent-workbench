@@ -220,3 +220,22 @@ PYTHONPATH=src python scripts/stage8c_project_session.py --projects-root project
 ### 通过标准
 - chat/check/build/review 至少各成功执行 1 次
 - build 后 review list 能看到 draft 资产
+
+## 13) 验证阶段 8D（项目文件夹直导）
+
+```bash
+cat examples/folder_import_commands.json
+PYTHONPATH=src python scripts/stage8c_folder_import.py --project-root projects/demo_project
+PYTHONPATH=src python scripts/stage8c_folder_import.py --project-root projects/demo_project --json
+```
+
+### 预期现象
+- 自动补齐 `incoming/canon/draft/reference/.workbench` 目录
+- 自动忽略 `.workbench/` 等系统目录
+- 生成 `.workbench/chunks/chunks.jsonl`
+- 生成 `.workbench/logs/import_report.json`
+- 报告包含扫描数、自动分类数、chunk 数、跳过项与问题项
+
+### 通过标准
+- 命令成功
+- 报告可读取且字段完整

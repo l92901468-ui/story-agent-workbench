@@ -315,3 +315,23 @@
 - 阶段 8A：进行中（真实项目导入与 project_id 接入）
 - 阶段 8B：进行中（真实项目质量校准）
 - 阶段 8C：进行中（项目工作台统一入口）
+- 阶段 8D：进行中（项目文件夹直导）
+
+### 8D 项目文件夹直导（当前子阶段）
+
+#### 目标
+- 面向无基础用户提供“项目目录 + 一条命令”导入模式。
+
+#### 具体任务
+1. 支持 `incoming/canon/draft/reference/.workbench` 目录约定并自动补齐。
+2. 自动扫描 txt/md，跳过系统目录（`.workbench/published/cache/logs` 等）。
+3. 对 `incoming` 做最小可解释自动分类（canon/draft/reference）。
+4. 自动执行分层切分并输出 `.workbench/chunks/chunks.jsonl`。
+5. 生成最小工作输出（summaries/graph seed/import report）。
+6. 至少一个现有模块可直接基于 `project_root` 工作。
+
+#### 验收标准
+- 用户不需要手动理解 chunk 参数
+- 系统输出与用户原始文档分区清楚
+- 导入报告字段稳定且可读
+- 有最小测试覆盖扫描/忽略/分类/切分/报告

@@ -264,14 +264,22 @@ def generate_reply(
         graph_evidence=graph_evidence,
         graph_results=graph_retrieval,
         published_root=(
-            Path(retrieval_config.projects_root) / retrieval_config.project_id / "workbench" / "published"
-            if retrieval_config.project_id
-            else None
+            Path(retrieval_config.project_root) / ".workbench" / "published"
+            if retrieval_config.project_root
+            else (
+                Path(retrieval_config.projects_root) / retrieval_config.project_id / "workbench" / "published"
+                if retrieval_config.project_id
+                else None
+            )
         ),
         draft_root=(
-            Path(retrieval_config.projects_root) / retrieval_config.project_id / "workbench" / "draft"
-            if retrieval_config.project_id
-            else None
+            Path(retrieval_config.project_root) / ".workbench" / "assets" / "draft"
+            if retrieval_config.project_root
+            else (
+                Path(retrieval_config.projects_root) / retrieval_config.project_id / "workbench" / "draft"
+                if retrieval_config.project_id
+                else None
+            )
         ),
     )
     reply_text = orchestration.final_reply

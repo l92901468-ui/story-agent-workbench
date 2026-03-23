@@ -8,6 +8,7 @@ from typing import Iterable
 
 SUPPORTED_SUFFIXES = {".txt", ".md"}
 KNOWN_LAYERS = {"canon", "draft", "reference"}
+SYSTEM_DIR_NAMES = {".workbench", "workbench", "published", "cache", "logs", "__pycache__", ".git"}
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,9 @@ def discover_text_documents(root_dir: Path | str) -> list[Path]:
     files = [
         path
         for path in root_path.rglob("*")
-        if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
+        if path.is_file()
+        and path.suffix.lower() in SUPPORTED_SUFFIXES
+        and not any(part in SYSTEM_DIR_NAMES for part in path.parts)
     ]
     return sorted(files)
 

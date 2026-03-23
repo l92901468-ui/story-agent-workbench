@@ -20,10 +20,20 @@ from .schema import Registry
 class GraphConfig:
     registry_path: Path = Path("data/extracted/registry.json")
     project_id: str | None = None
+    project_root: Path | None = None
     projects_root: Path = Path("projects")
 
 
 def resolve_registry_path(config: GraphConfig) -> Path:
+    if config.project_root:
+        root = Path(config.project_root)
+        candidate = root / ".workbench" / "graph" / "registry_seed.json"
+        if candidate.exists():
+            return candidate
+        extracted = root / ".workbench" / "extracted" / "registry.json"
+        if extracted.exists():
+            return extracted
+        return candidate
     if config.project_id:
         return config.projects_root / config.project_id / "workbench" / "extracted" / "registry.json"
     return config.registry_path
@@ -173,9 +183,13 @@ def retrieve_graph(query: str, config: GraphConfig | None = None) -> dict[str, A
         "evidence": [],
     }
     published_root = (
-        config.projects_root / config.project_id / "workbench" / "published"
-        if config and config.project_id
-        else Path("data/workbench/published")
+        Path(config.project_root) / ".workbench" / "published"
+        if config and config.project_root
+        else (
+            config.projects_root / config.project_id / "workbench" / "published"
+            if config and config.project_id
+            else Path("data/workbench/published")
+        )
     )
     published_assets = load_published_assets(root=published_root)
     published_context = build_runtime_asset_context(published_assets)

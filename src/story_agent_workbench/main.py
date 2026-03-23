@@ -33,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--memory-turns", type=int, default=3, help="Recent turns to keep")
     parser.add_argument("--data-root", default="data/samples", help="Input docs root")
     parser.add_argument("--project-id", default=None, help="Optional project id under projects/<project_id>/")
+    parser.add_argument("--project-root", default=None, help="Optional direct project root path")
     parser.add_argument("--projects-root", default="projects", help="Projects root directory")
     parser.add_argument("--chunk-size", type=int, default=300, help="Chunk size for text retrieval")
     parser.add_argument("--overlap", type=int, default=40, help="Chunk overlap for text retrieval")
@@ -110,6 +111,7 @@ def run_cli(argv: list[str] | None = None) -> int:
     text_config = RetrievalConfig(
         data_root=Path(args.data_root),
         project_id=args.project_id,
+        project_root=Path(args.project_root) if args.project_root else None,
         projects_root=Path(args.projects_root),
         chunk_size=args.chunk_size,
         overlap=args.overlap,
@@ -117,6 +119,7 @@ def run_cli(argv: list[str] | None = None) -> int:
     graph_config = GraphConfig(
         registry_path=Path(args.registry_path),
         project_id=args.project_id,
+        project_root=Path(args.project_root) if args.project_root else None,
         projects_root=Path(args.projects_root),
     )
 

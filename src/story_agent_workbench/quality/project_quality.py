@@ -41,7 +41,10 @@ class QualityIssue:
 
 def _load_project_texts(project_root: Path) -> list[dict[str, Any]]:
     manifest_path = project_root / "workbench" / "import_manifest.json"
-    if manifest_path.exists():
+    folder_mode_report = project_root / ".workbench" / "logs" / "import_report.json"
+    if folder_mode_report.exists():
+        manifest = json.loads(folder_mode_report.read_text(encoding="utf-8"))
+    elif manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     else:
         manifest = import_project_documents(project_id=project_root.name, projects_root=project_root.parent)
@@ -319,13 +322,28 @@ def _check_low_confidence_notice(issues: list[QualityIssue], docs: list[dict[str
 
 def run_project_quality_check(
     *,
-    project_id: str,
+    project_id: str | None = None,
+    project_root: Path | str | None = None,
     projects_root: Path | str = Path("projects"),
 ) -> dict[str, Any]:
-    root = Path(projects_root) / project_id
+    if project_root is not None:
+        root = Path(project_root)
+        effective_project_id = project_id or root.name
+    else:
+        if not project_id:
+            raise ValueError("project_id is required when project_root is not provided")
+        root = Path(projects_root) / project_id
+        effective_project_id = project_id
     docs = _load_project_texts(root)
-    registry = load_registry(GraphConfig(project_id=project_id, projects_root=Path(projects_root)))
-    published = load_published_assets(root=root / "workbench" / "published")
+    registry = load_registry(
+        GraphConfig(
+            project_id=None if project_root is not None else effective_project_id,
+            project_root=root if project_root is not None else None,
+            projects_root=Path(projects_root),
+        )
+    )
+    published_root = root / ".workbench" / "published" if (root / ".workbench").exists() else root / "workbench" / "published"
+    published = load_published_assets(root=published_root)
 
     characters = _collect_characters(docs, [c.name for c in registry.characters])
     rel_pairs = [(r.source_entity, r.target_entity) for r in registry.relationships]
@@ -340,7 +358,8 @@ def run_project_quality_check(
     issues.extend(_check_low_confidence_notice(issues, docs))
 
     return {
-        "project_id": project_id,
+        "project_id": effective_project_id,
+        "project_root": str(root),
         "projects_root": str(projects_root),
         "issue_count": len(issues),
         "issues": [item.to_dict() for item in issues],
