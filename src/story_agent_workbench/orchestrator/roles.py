@@ -1,0 +1,51 @@
+"""Internal hidden roles for stage-7A orchestration."""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+def story_buddy_role(*, base_reply: str) -> str:
+    """Default companion tone: follow user's narrative flow without over-prescribing."""
+
+    return base_reply
+
+
+def critic_role(*, graph_evidence: list[str], text_evidence: list[str]) -> str:
+    if graph_evidence:
+        return "建议优先核对角色关系与阵营链条是否前后一致，再确认信息揭示时点是否过早。"
+    if text_evidence:
+        return "建议先检查这几段证据对应的设定是否互相冲突，尤其是角色动机变化。"
+    return "当前证据偏少，先标记潜在冲突点，后续补更多依据再做结论。"
+
+
+def systems_designer_role(*, query: str) -> str:
+    return (
+        "从玩法/互动设计角度，可以把这一段拆成“目标-反馈-代价”三步，"
+        "让玩家行为与叙事结果形成闭环。"
+    )
+
+
+def builder_role(*, query: str, graph_results: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return minimal structured entries for沉淀."""
+
+    entries: list[dict[str, Any]] = []
+    if graph_results:
+        answer_type = graph_results.get("answer_type", "none")
+        entries.append(
+            {
+                "type": "relationship_note",
+                "title": f"graph:{answer_type}",
+                "content": graph_results.get("results", {}),
+            }
+        )
+
+    entries.append(
+        {
+            "type": "open_question",
+            "title": "待确认问题",
+            "content": f"{query}（后续可补 canon 证据）",
+        }
+    )
+
+    return entries
