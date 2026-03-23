@@ -1,0 +1,78 @@
+{
+  "characters": [
+    {
+      "id": "character:艾琳",
+      "name": "艾琳",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    }
+  ],
+  "factions": [
+    {
+      "id": "faction:灰塔阵营",
+      "name": "灰塔阵营",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    }
+  ],
+  "locations": [
+    {
+      "id": "location:艾琳在旧港口",
+      "name": "艾琳在旧港口",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    }
+  ],
+  "events": [
+    {
+      "id": "event:会合",
+      "name": "会合",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    },
+    {
+      "id": "event:延迟",
+      "name": "延迟",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    },
+    {
+      "id": "event:招募",
+      "name": "招募",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    },
+    {
+      "id": "event:不公开情报",
+      "name": "不公开情报",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    }
+  ],
+  "timeline_anchors": [
+    {
+      "id": "timeline:连续三天",
+      "label": "连续三天",
+      "source": "canon/chapter_01.md",
+      "description": ""
+    }
+  ],
+  "relationships": [
+    {
+      "id": "relationship:艾琳_investigates_灰塔阵营",
+      "source_entity": "艾琳",
+      "target_entity": "灰塔阵营",
+      "relation_type": "investigates",
+      "source": "canon/chapter_01.md",
+      "evidence": "艾琳确认灰塔阵营在暗地里招募码头工"
+    }
+  ],
+  "aliases": [
+    {
+      "id": "alias:灰塔阵营_灰塔",
+      "canonical_name": "灰塔阵营",
+      "alias": "灰塔",
+      "source": "canon/chapter_01.md"
+    }
+  ]
+}
