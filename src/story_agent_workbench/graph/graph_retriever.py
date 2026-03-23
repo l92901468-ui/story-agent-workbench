@@ -144,15 +144,27 @@ def retrieve_graph(query: str, config: GraphConfig | None = None) -> dict[str, A
     }
 
     if len(matched_entities) >= 2 and ("关系" in query or "关联" in query):
-        a, b = matched_entities[0], matched_entities[1]
-        rels = query_relationship_between(registry, a, b)
-        result["answer_type"] = "relationship_between"
-        result["results"] = {"entity_a": a, "entity_b": b, "relationships": rels}
-        result["evidence"] = [
-            f"{r['source_entity']} -> {r['target_entity']} ({r['relation_type']}) | {r['source']}"
-            for r in rels
-        ]
-        return result
+        unique_entities: list[str] = []
+        seen = set()
+        for ent in matched_entities:
+            canonical = _resolve_alias(registry, ent)
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            unique_entities.append(canonical)
+            if len(unique_entities) == 2:
+                break
+
+        if len(unique_entities) >= 2:
+            a, b = unique_entities[0], unique_entities[1]
+            rels = query_relationship_between(registry, a, b)
+            result["answer_type"] = "relationship_between"
+            result["results"] = {"entity_a": a, "entity_b": b, "relationships": rels}
+            result["evidence"] = [
+                f"{r['source_entity']} -> {r['target_entity']} ({r['relation_type']}) | {r['source']}"
+                for r in rels
+            ]
+            return result
 
     if matched_entities:
         first = matched_entities[0]

@@ -1,33 +1,45 @@
-"""Minimal router with stage-4 graph-aware path selection."""
+"""Stage-5 router with configurable strategy and confidence output."""
 
 from __future__ import annotations
 
 from typing import Any
 
-GRAPH_HINT_KEYWORDS = {
-    "关系",
-    "阵营",
-    "全局",
-    "链条",
-    "关联",
-    "冲突",
-    "谁和谁",
-    "哪些人物",
-}
+from story_agent_workbench.strategy import StrategyConfig
 
 
-def route_query(query: str) -> dict[str, Any]:
-    """Return a minimal route decision structure."""
+def _keyword_score(query: str, keywords: list[str]) -> float:
+    if not keywords:
+        return 0.0
+    hits = sum(1 for kw in keywords if kw and kw in query)
+    return min(1.0, hits / max(1, len(keywords) / 2))
 
-    if any(keyword in query for keyword in GRAPH_HINT_KEYWORDS):
-        return {
-            "route": "graph_retrieval",
-            "reason": "query contains global-relation hints (stage-4 minimal graph path)",
-            "query": query,
-        }
+
+def route_query(query: str, strategy: StrategyConfig) -> dict[str, Any]:
+    """Return route decision with reason and confidence."""
+
+    graph_score = _keyword_score(query, strategy.route_graph_keywords)
+    text_score = _keyword_score(query, strategy.route_text_keywords)
+
+    if graph_score >= strategy.route_graph_threshold and graph_score >= text_score:
+        route = "graph_retrieval"
+        confidence = graph_score
+        reason = "graph keyword score is dominant"
+    elif text_score >= strategy.route_text_threshold:
+        route = "text_retrieval"
+        confidence = text_score
+        reason = "text keyword score is dominant"
+    else:
+        route = "text_retrieval"
+        confidence = 0.2
+        reason = "no strong route signal; fallback to text"
 
     return {
-        "route": "text_retrieval",
-        "reason": "default route for local text lookup",
+        "route": route,
+        "reason": reason,
+        "confidence": round(confidence, 3),
         "query": query,
+        "scores": {
+            "graph": round(graph_score, 3),
+            "text": round(text_score, 3),
+        },
     }

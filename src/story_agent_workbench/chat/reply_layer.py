@@ -1,7 +1,4 @@
-"""Stage-4 chat reply layer.
-
-Provides lightweight multi-mode replies with optional text/graph retrieval and short-term memory.
-"""
+"""Stage-5 chat reply layer with routing/reply strategy policies."""
 
 from __future__ import annotations
 
@@ -10,31 +7,7 @@ from typing import Any
 
 from story_agent_workbench.graph.graph_retriever import GraphConfig, retrieve_graph
 from story_agent_workbench.retrieval.text_retriever import RetrievalConfig, retrieve_text
-
-RETRIEVAL_HINT_KEYWORDS = {
-    "证据",
-    "出处",
-    "原文",
-    "引用",
-    "哪段",
-    "根据",
-    "冲突",
-    "角色",
-    "阵营",
-    "时间线",
-    "伏笔",
-    "设定",
-}
-
-GRAPH_HINT_KEYWORDS = {
-    "关系",
-    "阵营",
-    "全局",
-    "链条",
-    "关联",
-    "谁和谁",
-    "哪些人物",
-}
+from story_agent_workbench.strategy import StrategyConfig
 
 MODE_DUTIES = {
     "chat": "轻松聊剧情方向与创作思路。",
@@ -42,21 +15,6 @@ MODE_DUTIES = {
     "critic": "优先挑潜在冲突与不一致。",
     "evidence": "只输出证据片段与来源。",
 }
-
-
-def _should_use_text_retrieval(query: str, mode: str) -> bool:
-    if mode in {"feedback"}:
-        return True
-
-    lowered = query.lower()
-    return any(keyword in lowered for keyword in RETRIEVAL_HINT_KEYWORDS)
-
-
-def _should_use_graph_retrieval(query: str, mode: str) -> bool:
-    if mode in {"critic", "evidence"}:
-        return True
-
-    return any(keyword in query for keyword in GRAPH_HINT_KEYWORDS)
 
 
 def _format_memory_context(memory_turns: list[dict[str, Any]]) -> str:
@@ -75,6 +33,47 @@ def _format_memory_context(memory_turns: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _pick_mode(query: str, requested_mode: str, strategy: StrategyConfig) -> tuple[str, str]:
+    if requested_mode != "chat" or not strategy.auto_mode_enabled:
+        return requested_mode, "requested mode is explicit"
+
+    for candidate, keywords in strategy.mode_keywords.items():
+        if any(kw in query for kw in keywords):
+            return candidate, f"auto mode switch by keyword match: {candidate}"
+
+    return "chat", "default chat mode"
+
+
+def _compute_text_confidence(text_retrieval: dict[str, Any] | None) -> float:
+    if not text_retrieval:
+        return 0.0
+    results = text_retrieval.get("results", [])
+    if not results:
+        return 0.0
+    top = float(results[0].get("score", 0.0))
+    return min(1.0, top / 3.0)
+
+
+def _compute_graph_confidence(graph_retrieval: dict[str, Any] | None) -> float:
+    if not graph_retrieval:
+        return 0.0
+    answer_type = graph_retrieval.get("answer_type", "none")
+    evidence = graph_retrieval.get("evidence", [])
+    if answer_type == "none":
+        return 0.0
+    if evidence:
+        return min(1.0, 0.45 + 0.1 * len(evidence))
+    return 0.3
+
+
+def _use_graph(route_decision: dict[str, Any], mode: str) -> bool:
+    return route_decision.get("route") == "graph_retrieval" or mode in {"critic", "evidence"}
+
+
+def _use_text(route_decision: dict[str, Any], mode: str) -> bool:
+    return route_decision.get("route") == "text_retrieval" or mode in {"feedback", "evidence"}
+
+
 def _try_llm_reply(
     *,
     query: str,
@@ -83,13 +82,6 @@ def _try_llm_reply(
     graph_retrieval: dict[str, Any] | None,
     memory_turns: list[dict[str, Any]],
 ) -> str | None:
-    """Optional LLM call path.
-
-    Best-effort only:
-    - requires openai package
-    - requires OPENAI_API_KEY
-    """
-
     if not os.getenv("OPENAI_API_KEY"):
         return None
 
@@ -99,21 +91,18 @@ def _try_llm_reply(
         return None
 
     context_lines = [f"模式职责：{MODE_DUTIES.get(mode, '')}"]
-
     memory_block = _format_memory_context(memory_turns)
     if memory_block:
         context_lines.append(memory_block)
 
     if text_retrieval and text_retrieval.get("results"):
-        context_lines.append("文本检索证据（节选）：")
+        context_lines.append("文本证据（轻量）：")
         for item in text_retrieval["results"][:2]:
-            context_lines.append(
-                f"- {item['source']} | {item['chunk_id']} | {item['layer']} | score={item['score']}"
-            )
+            context_lines.append(f"- {item['source']} | {item['chunk_id']} | score={item['score']}")
 
     if graph_retrieval and graph_retrieval.get("evidence"):
-        context_lines.append("图检索证据（节选）：")
-        for ev in graph_retrieval["evidence"][:3]:
+        context_lines.append("图证据（轻量）：")
+        for ev in graph_retrieval["evidence"][:2]:
             context_lines.append(f"- {ev}")
 
     prompt = "\n".join([f"用户问题：{query}", *context_lines])
@@ -133,13 +122,15 @@ def _try_llm_reply(
 
 def _fallback_reply(
     *,
-    query: str,
     mode: str,
+    query: str,
     text_retrieval: dict[str, Any] | None,
     graph_retrieval: dict[str, Any] | None,
+    confidence_note: str,
     memory_turns: list[dict[str, Any]],
 ) -> str:
     text_results = text_retrieval.get("results", []) if text_retrieval else []
+    graph_evidence = graph_retrieval.get("evidence", []) if graph_retrieval else []
 
     memory_hint = ""
     if memory_turns:
@@ -147,59 +138,61 @@ def _fallback_reply(
         if last_user:
             memory_hint = f"（参考你上一轮提到的：{last_user}）"
 
+    uncertain_prefix = ""
+    if confidence_note:
+        uncertain_prefix = f"[置信提示] {confidence_note}\n"
+
     if mode == "evidence":
-        lines = ["证据模式："]
-
-        if graph_retrieval:
-            lines.append(f"- 图检索类型：{graph_retrieval.get('answer_type', 'none')}")
-            for idx, ev in enumerate(graph_retrieval.get("evidence", [])[:5], start=1):
-                lines.append(f"  [graph-{idx}] {ev}")
-
+        lines = [uncertain_prefix + "证据模式："]
+        if graph_evidence:
+            for idx, ev in enumerate(graph_evidence[:5], start=1):
+                lines.append(f"[graph-{idx}] {ev}")
         if text_results:
             for idx, item in enumerate(text_results[:3], start=1):
                 lines.append(
-                    f"  [text-{idx}] {item['chunk_id']} | {item['source']} | {item['layer']} | score={item['score']}"
+                    f"[text-{idx}] {item['chunk_id']} | {item['source']} | {item['layer']} | score={item['score']}"
                 )
-
         if len(lines) == 1:
-            lines.append("- 没有命中证据。")
-
+            lines.append("没有命中证据。")
         return "\n".join(lines)
 
     if mode == "critic":
-        if graph_retrieval and graph_retrieval.get("results"):
+        if graph_evidence:
             return (
-                f"挑刺模式{memory_hint}：\n"
-                f"- 图检索类型：{graph_retrieval.get('answer_type')}\n"
-                "- 建议先核对这些关系是否与当前 canon 一致，再看 draft 是否提前泄露信息。"
+                f"{uncertain_prefix}挑刺模式{memory_hint}：\n"
+                "- 我先基于当前图关系给你做一轮全局一致性检查。\n"
+                "- 重点看：角色知情时点、阵营链条是否断裂、伏笔是否回收。"
             )
-        return "挑刺模式：当前图关系命中较少，建议补充更多 canon 关系抽取后再检查全局冲突。"
+        return (
+            f"{uncertain_prefix}挑刺模式：图命中偏弱。先陪你顺一遍剧情逻辑，"
+            "再基于已有资料补依据。"
+        )
 
     if mode == "feedback":
         if text_results:
             top = text_results[0]
             return (
-                f"反馈模式{memory_hint}：\n"
-                f"- 先围绕 `{top['source']}` 这段做局部改写，优先澄清角色动机。\n"
-                "- 再检查信息揭示顺序，避免角色过早知道关键线索。"
+                f"{uncertain_prefix}反馈模式{memory_hint}：\n"
+                f"- 先围绕 `{top['source']}` 这段做局部改写。\n"
+                "- 再检查信息揭示顺序和角色动机连贯性。"
             )
-        return "反馈模式：先把目标拆成“剧情推进/角色塑造/信息揭示”，再逐段优化。"
+        return f"{uncertain_prefix}反馈模式：先把目标拆成“剧情推进/角色塑造/信息揭示”，再逐段优化。"
 
-    # mode == chat
-    if graph_retrieval and graph_retrieval.get("results"):
+    # chat
+    if graph_evidence:
         return (
-            f"我查到一些全局关系信息{memory_hint}。"
-            "如果你愿意，我可以继续按“角色关系 / 阵营链条 / 事件时间”三条线展开。"
+            f"{uncertain_prefix}我先抓到一些全局关系线索{memory_hint}。"
+            "要不要我按“角色关系 / 阵营链条 / 事件时间”三条线给你顺一遍？"
         )
-
     if text_results:
         top = text_results[0]
         return (
-            f"我看到一段相关文本{memory_hint}，最相关来源是 `{top['source']}`。"
+            f"{uncertain_prefix}我先找到一段相关文本（{top['source']}）{memory_hint}。"
             "你想先做保守改写，还是冲突加强版？"
         )
-
-    return "我们先轻松聊剧情吧。你更想先改人物关系、冲突节奏，还是设定一致性？"
+    return (
+        f"{uncertain_prefix}我们先陪你顺一下思路，再基于现有资料逐步补依据。"
+    )
 
 
 def generate_reply(
@@ -209,66 +202,89 @@ def generate_reply(
     show_evidence: bool,
     top_k: int,
     retrieval_config: RetrievalConfig,
-    graph_config: GraphConfig | None = None,
+    graph_config: GraphConfig | None,
+    strategy: StrategyConfig,
+    route_decision: dict[str, Any],
     memory_turns: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Generate chat reply with optional text/graph retrieval support."""
-
     if memory_turns is None:
         memory_turns = []
 
-    use_text = _should_use_text_retrieval(query, mode)
-    use_graph = _should_use_graph_retrieval(query, mode)
+    effective_mode, mode_reason = _pick_mode(query, mode, strategy)
+
+    use_text = _use_text(route_decision, effective_mode)
+    use_graph = _use_graph(route_decision, effective_mode)
 
     text_retrieval: dict[str, Any] | None = None
     graph_retrieval: dict[str, Any] | None = None
 
     if use_text:
         text_retrieval = retrieve_text(query=query, top_k=top_k, config=retrieval_config)
-
     if use_graph:
         graph_retrieval = retrieve_graph(query=query, config=graph_config)
 
+    text_conf = _compute_text_confidence(text_retrieval)
+    graph_conf = _compute_graph_confidence(graph_retrieval)
+
+    fallback_reason = ""
+    if use_graph and graph_conf < strategy.graph_conf_threshold and text_conf >= strategy.text_conf_threshold:
+        fallback_reason = "graph weak hit, fallback emphasis to text"
+        use_graph = False
+        graph_retrieval = None
+
+    if text_conf < strategy.low_confidence_threshold and graph_conf < strategy.low_confidence_threshold:
+        fallback_reason = (fallback_reason + "; " if fallback_reason else "") + "both channels weak; answer with uncertainty"
+
     llm_reply = _try_llm_reply(
         query=query,
-        mode=mode,
+        mode=effective_mode,
         text_retrieval=text_retrieval,
         graph_retrieval=graph_retrieval,
         memory_turns=memory_turns,
     )
+
     reply_text = llm_reply if llm_reply else _fallback_reply(
+        mode=effective_mode,
         query=query,
-        mode=mode,
         text_retrieval=text_retrieval,
         graph_retrieval=graph_retrieval,
+        confidence_note=fallback_reason,
         memory_turns=memory_turns,
     )
 
     payload: dict[str, Any] = {
-        "mode": mode,
-        "mode_duty": MODE_DUTIES.get(mode, ""),
+        "requested_mode": mode,
+        "mode": effective_mode,
+        "mode_reason": mode_reason,
+        "mode_duty": MODE_DUTIES.get(effective_mode, ""),
         "query": query,
-        "used_text_retrieval": use_text,
-        "used_graph_retrieval": use_graph,
+        "used_text_retrieval": bool(text_retrieval),
+        "used_graph_retrieval": bool(graph_retrieval),
+        "route": route_decision.get("route"),
+        "route_confidence": route_decision.get("confidence", 0.0),
+        "text_confidence": round(text_conf, 3),
+        "graph_confidence": round(graph_conf, 3),
+        "fallback_reason": fallback_reason,
         "memory_turns_used": len(memory_turns),
         "reply": reply_text,
     }
 
     if text_retrieval:
         payload["text_retrieval"] = text_retrieval
-
     if graph_retrieval:
         payload["graph_retrieval"] = graph_retrieval
 
-    if mode == "evidence":
+    show_full_evidence = effective_mode in strategy.show_full_evidence_modes or show_evidence
+
+    if show_full_evidence:
         payload["evidence"] = {
             "graph": graph_retrieval.get("evidence", []) if graph_retrieval else [],
             "text": text_retrieval.get("evidence", []) if text_retrieval else [],
         }
-    elif show_evidence:
-        payload["evidence"] = {
-            "graph": graph_retrieval.get("evidence", []) if graph_retrieval else [],
-            "text": text_retrieval.get("evidence", []) if text_retrieval else [],
+    else:
+        payload["light_citation"] = {
+            "graph": (graph_retrieval.get("evidence", [])[:1] if graph_retrieval else []),
+            "text": (text_retrieval.get("evidence", [])[:1] if text_retrieval else []),
         }
 
     return payload

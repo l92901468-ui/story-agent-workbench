@@ -54,9 +54,18 @@
   - 分发到对应检索模块
 - 当前策略：
   - 规则优先（简单、可解释）
-  - 暂不引入复杂多 agent 编排
+  - 输出 `route/reason/confidence`
 
-### 3.2.5 聊天回复层（阶段 3.6）
+### 3.2.2 路由与回复策略层（阶段 5）
+- 配置路径：`config/strategy.json`
+- 代码路径：`src/story_agent_workbench/strategy/config.py`
+- 覆盖内容：
+  - 路由触发关键词与阈值（text vs graph）
+  - mode 自动切换策略（默认 chat）
+  - evidence 展示策略（full vs light citation）
+  - 弱命中回退策略（graph→text，双弱时不确定提示）
+
+### 3.2.5 聊天回复层（阶段 5 策略接入）
 - 路径：`src/story_agent_workbench/chat/reply_layer.py`
 - 职责：
   - 提供聊天式主回复（chat/feedback/critic/evidence）
