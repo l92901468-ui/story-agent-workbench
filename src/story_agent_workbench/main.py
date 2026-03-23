@@ -98,6 +98,7 @@ def format_human_output(payload: dict[str, Any]) -> str:
         lines.append("\n--- published assets referenced (light) ---")
         for item in response["published_asset_refs"][:2]:
             lines.append(f"[{item.get('asset_type')}] {item.get('title')} | {item.get('path')}")
+            lines.append(f"[{item.get('type')}] {item.get('path')}")
 
     return "\n".join(lines)
 
@@ -122,6 +123,10 @@ def run_cli(argv: list[str] | None = None) -> int:
         project_root=Path(args.project_root) if args.project_root else None,
         projects_root=Path(args.projects_root),
     )
+        chunk_size=args.chunk_size,
+        overlap=args.overlap,
+    )
+    graph_config = GraphConfig(registry_path=Path(args.registry_path))
 
     memory_turns = load_recent_turns(args.session_id, args.memory_turns)
     response = generate_reply(

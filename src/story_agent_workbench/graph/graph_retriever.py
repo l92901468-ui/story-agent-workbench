@@ -48,6 +48,10 @@ def load_registry(config: GraphConfig | None = None) -> Registry:
         return Registry()
 
     data = json.loads(registry_path.read_text(encoding="utf-8"))
+    if not config.registry_path.exists():
+        return Registry()
+
+    data = json.loads(config.registry_path.read_text(encoding="utf-8"))
     return Registry.from_dict(data)
 
 
@@ -254,5 +258,7 @@ def retrieve_graph(query: str, config: GraphConfig | None = None) -> dict[str, A
         result["answer_type"] = "published_asset_context"
         result["results"] = {"published_refs": published_refs}
         result["evidence"] = [f"[published] {item['title']} | {item['path']}" for item in published_refs]
+
+        return result
 
     return result

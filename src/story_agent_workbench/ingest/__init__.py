@@ -4,6 +4,7 @@ from .chunker import chunk_text
 from .folder_import import import_project_folder
 from .loader import TextDocument, discover_text_documents, load_text_documents
 from .project_importer import import_project_documents, run_import_checks
+from .loader import TextDocument, discover_text_documents, load_text_documents
 
 __all__ = [
     "TextDocument",

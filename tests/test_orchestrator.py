@@ -44,6 +44,7 @@ class TestOrchestrator(unittest.TestCase):
         mock_persist.return_value = [
             {"type": "character_card", "title": "艾琳 角色卡", "path": "data/workbench/draft/characters/demo.json"}
         ]
+    def test_builder_trigger_by_keyword(self) -> None:
         out = orchestrate_hidden_agents(
             query="请帮我整理成结构化条目",
             mode="chat",
@@ -66,6 +67,12 @@ class TestOrchestrator(unittest.TestCase):
         mock_persist.return_value = [
             {"type": "open_question", "title": "待确认问题", "path": "data/workbench/draft/open_questions/demo.json"}
         ]
+        for entry in out.builder_entries:
+            self.assertIn("type", entry)
+            self.assertIn("title", entry)
+            self.assertIn("content", entry)
+
+    def test_builder_trigger_in_evidence_mode(self) -> None:
         out = orchestrate_hidden_agents(
             query="这轮先不整理",
             mode="evidence",

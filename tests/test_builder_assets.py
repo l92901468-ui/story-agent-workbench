@@ -11,6 +11,8 @@ from story_agent_workbench.orchestrator.assets import (
     persist_builder_assets,
     publish_asset,
     reject_asset,
+    build_builder_assets,
+    persist_builder_assets,
 )
 
 
@@ -33,6 +35,7 @@ class TestBuilderAssets(unittest.TestCase):
         )
 
         all_types = {item.asset_type for item in assets_character + assets_relationship}
+        all_types = {item.type for item in assets_character + assets_relationship}
         self.assertIn("character_card", all_types)
         self.assertIn("relationship_card", all_types)
         self.assertIn("event_card", all_types)
@@ -47,6 +50,7 @@ class TestBuilderAssets(unittest.TestCase):
                 BuilderAsset(
                     asset_id="open-question-test",
                     asset_type="open_question",
+                    type="open_question",
                     title="待确认问题",
                     summary="测试沉淀",
                     source_query="这段是否有冲突？",
@@ -64,6 +68,7 @@ class TestBuilderAssets(unittest.TestCase):
             payload = json.loads(saved_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["asset_type"], "open_question")
             self.assertEqual(payload["status"], "draft")
+            self.assertEqual(payload["type"], "open_question")
             self.assertEqual(payload["source_query"], "这段是否有冲突？")
             self.assertIn("reference_sources", payload)
             self.assertIn("generated_at", payload)

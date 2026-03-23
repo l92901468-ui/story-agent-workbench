@@ -209,6 +209,9 @@
   - 统一 JSON 输出结构
   - 复用现有 chat/quality/builder/review 能力，降低日常使用成本
 
+### 3.6 预留目录
+- `src/story_agent_workbench/core/`：通用配置、类型、公共工具（后续）
+
 ---
 
 ## 4. 数据层语义（强约定）

@@ -31,6 +31,7 @@ class BuilderAsset:
 
     asset_id: str
     asset_type: str
+    type: str
     title: str
     summary: str
     source_query: str
@@ -48,6 +49,10 @@ class BuilderAsset:
         # Keep compatibility with stage-7B output readers.
         data["type"] = self.asset_type
         return data
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 def _now_iso() -> str:
@@ -165,6 +170,13 @@ def build_builder_assets(
                     query=query,
                     refs=refs,
                     now=now,
+                BuilderAsset(
+                    type="character_card",
+                    title=f"{character} 角色卡",
+                    summary=f"角色 {character} 的当前关系上下文（draft）。",
+                    source_query=query,
+                    reference_sources=refs,
+                    generated_at=now,
                     metadata={"character": character, "graph_answer_type": answer_type},
                 )
             )
@@ -178,6 +190,13 @@ def build_builder_assets(
                     query=query,
                     refs=refs,
                     now=now,
+                BuilderAsset(
+                    type="relationship_card",
+                    title=f"关系卡：{answer_type}",
+                    summary="从本轮图检索结果沉淀的关系结构（draft）。",
+                    source_query=query,
+                    reference_sources=refs,
+                    generated_at=now,
                     metadata={"graph_answer_type": answer_type, "graph_results": result_obj},
                 )
             )
@@ -191,6 +210,13 @@ def build_builder_assets(
                 query=query,
                 refs=refs,
                 now=now,
+            BuilderAsset(
+                type="event_card",
+                title="事件卡（草稿）",
+                summary="本轮问题包含事件/行动信号，建议补齐时间点、参与者和结果。",
+                source_query=query,
+                reference_sources=refs,
+                generated_at=now,
             )
         )
 
@@ -203,6 +229,13 @@ def build_builder_assets(
                 query=query,
                 refs=refs,
                 now=now,
+            BuilderAsset(
+                type="foreshadowing_item",
+                title="伏笔条目（待回收）",
+                summary="记录本轮提及的伏笔/暗示，后续在 canon 中确认回收位置。",
+                source_query=query,
+                reference_sources=refs,
+                generated_at=now,
             )
         )
 
@@ -215,6 +248,13 @@ def build_builder_assets(
                 query=query,
                 refs=refs,
                 now=now,
+            BuilderAsset(
+                type="gameplay_hook",
+                title="玩法钩子（草稿）",
+                summary="从本轮问题沉淀一个可执行的玩法互动切入点。",
+                source_query=query,
+                reference_sources=refs,
+                generated_at=now,
             )
         )
 
@@ -227,6 +267,13 @@ def build_builder_assets(
             refs=refs,
             now=now,
             metadata={"published_refs_used": len(published_asset_refs or [])},
+        BuilderAsset(
+            type="open_question",
+            title="待确认问题",
+            summary=f"{query}（后续补 canon 证据与结论）",
+            source_query=query,
+            reference_sources=refs,
+            generated_at=now,
         )
     )
 
@@ -251,6 +298,7 @@ def persist_builder_assets(
 
     for idx, asset in enumerate(assets, start=1):
         folder_name = ASSET_DIR_MAP.get(asset.asset_type)
+        folder_name = ASSET_DIR_MAP.get(asset.type)
         if not folder_name:
             continue
 
@@ -258,6 +306,7 @@ def persist_builder_assets(
         out_dir.mkdir(parents=True, exist_ok=True)
 
         filename = f"{ts}_{idx:02d}_{asset.asset_id}_{_safe_slug(asset.title)}.json"
+        filename = f"{ts}_{idx:02d}_{_safe_slug(asset.title)}.json"
         file_path = out_dir / filename
         file_path.write_text(json.dumps(asset.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -269,6 +318,10 @@ def persist_builder_assets(
                 "path": str(file_path),
                 "generated_at": asset.generated_at,
                 "status": asset.status,
+                "type": asset.type,
+                "title": asset.title,
+                "path": str(file_path),
+                "generated_at": asset.generated_at,
             }
         )
 

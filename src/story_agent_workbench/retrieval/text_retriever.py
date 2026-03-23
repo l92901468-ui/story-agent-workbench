@@ -72,6 +72,7 @@ def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
             return cached
 
     documents = load_text_documents(root)
+    documents = load_text_documents(config.data_root)
     all_chunks: list[dict[str, Any]] = []
 
     for doc in documents:
