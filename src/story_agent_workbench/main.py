@@ -32,6 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--session-id", default="default", help="Session identifier for local memory")
     parser.add_argument("--memory-turns", type=int, default=3, help="Recent turns to keep")
     parser.add_argument("--data-root", default="data/samples", help="Input docs root")
+    parser.add_argument(
+        "--test-file",
+        action="append",
+        default=[],
+        help="Ad-hoc test file path. Pass multiple times to ingest/chunk as temporary RAG sources for this run.",
+    )
     parser.add_argument("--chunk-size", type=int, default=300, help="Chunk size for text retrieval")
     parser.add_argument("--overlap", type=int, default=40, help="Chunk overlap for text retrieval")
     parser.add_argument("--registry-path", default="data/extracted/registry.json", help="Graph registry JSON path")
@@ -92,6 +98,17 @@ def format_human_output(payload: dict[str, Any]) -> str:
         for item in response["builder_saved_assets"][:5]:
             lines.append(f"[{item.get('type')}] {item.get('path')}")
 
+    text_stats = response.get("text_retrieval", {}).get("stats", {})
+    if text_stats.get("extra_files_requested", 0):
+        lines.append("\n--- ad-hoc file ingest ---")
+        lines.append(
+            "requested={req} loaded={loaded} skipped={skipped}".format(
+                req=text_stats.get("extra_files_requested", 0),
+                loaded=text_stats.get("extra_files_loaded", 0),
+                skipped=text_stats.get("extra_files_skipped", 0),
+            )
+        )
+
     return "\n".join(lines)
 
 
@@ -105,6 +122,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         data_root=Path(args.data_root),
         chunk_size=args.chunk_size,
         overlap=args.overlap,
+        extra_files=tuple(Path(p) for p in args.test_file),
     )
     graph_config = GraphConfig(registry_path=Path(args.registry_path))
 

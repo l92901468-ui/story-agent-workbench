@@ -19,6 +19,8 @@ class RetrievalConfig:
     data_root: Path = Path("data/samples")
     chunk_size: int = 300
     overlap: int = 40
+    extra_files: tuple[Path, ...] = ()
+    extra_layer: str = "test_input"
 
 
 def tokenize(text: str) -> list[str]:
@@ -53,6 +55,8 @@ def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
 
     documents = load_text_documents(config.data_root)
     all_chunks: list[dict[str, Any]] = []
+    loaded_extra_files = 0
+    skipped_extra_files = 0
 
     for doc in documents:
         all_chunks.extend(
@@ -64,6 +68,35 @@ def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
                 overlap=config.overlap,
             )
         )
+
+    for file_path in config.extra_files:
+        path = Path(file_path)
+        if not path.exists() or not path.is_file():
+            skipped_extra_files += 1
+            continue
+
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            skipped_extra_files += 1
+            continue
+
+        loaded_extra_files += 1
+        all_chunks.extend(
+            chunk_text(
+                text=text,
+                source=str(path),
+                layer=config.extra_layer,
+                chunk_size=config.chunk_size,
+                overlap=config.overlap,
+            )
+        )
+
+    build_chunks.last_build_stats = {
+        "extra_files_requested": len(config.extra_files),
+        "extra_files_loaded": loaded_extra_files,
+        "extra_files_skipped": skipped_extra_files,
+    }
 
     return all_chunks
 
@@ -119,5 +152,6 @@ def retrieve_text(
         "stats": {
             "total_chunks": len(chunks),
             "matched_chunks": len(scored_results),
+            **getattr(build_chunks, "last_build_stats", {}),
         },
     }

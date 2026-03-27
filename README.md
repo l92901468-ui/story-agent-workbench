@@ -119,6 +119,12 @@ PYTHONPATH=src python -m story_agent_workbench "灰塔 线索"
 PYTHONPATH=src python -m story_agent_workbench "罗安 冲突" --top-k 2 --data-root data/samples --chunk-size 300 --overlap 40
 ```
 
+临时传入测试文件并立即接入 RAG（会自动切块，仅对本次运行生效）：
+
+```bash
+PYTHONPATH=src python -m story_agent_workbench "帮我看这段设定是否冲突" --test-file /path/to/test_story.txt
+```
+
 如果你想看完整结构化输出（包含 evidence/results/stats）：
 
 ```bash
