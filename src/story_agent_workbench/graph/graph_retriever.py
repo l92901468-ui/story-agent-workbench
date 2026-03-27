@@ -7,18 +7,47 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from story_agent_workbench.core import (
+    build_runtime_asset_context,
+    find_relevant_published_assets,
+    load_published_assets,
+)
+
 from .schema import Registry
 
 
 @dataclass(frozen=True)
 class GraphConfig:
     registry_path: Path = Path("data/extracted/registry.json")
+    project_id: str | None = None
+    project_root: Path | None = None
+    projects_root: Path = Path("projects")
+
+
+def resolve_registry_path(config: GraphConfig) -> Path:
+    if config.project_root:
+        root = Path(config.project_root)
+        candidate = root / ".workbench" / "graph" / "registry_seed.json"
+        if candidate.exists():
+            return candidate
+        extracted = root / ".workbench" / "extracted" / "registry.json"
+        if extracted.exists():
+            return extracted
+        return candidate
+    if config.project_id:
+        return config.projects_root / config.project_id / "workbench" / "extracted" / "registry.json"
+    return config.registry_path
 
 
 def load_registry(config: GraphConfig | None = None) -> Registry:
     if config is None:
         config = GraphConfig()
 
+    registry_path = resolve_registry_path(config)
+    if not registry_path.exists():
+        return Registry()
+
+    data = json.loads(registry_path.read_text(encoding="utf-8"))
     if not config.registry_path.exists():
         return Registry()
 
@@ -157,6 +186,18 @@ def retrieve_graph(query: str, config: GraphConfig | None = None) -> dict[str, A
         "results": {},
         "evidence": [],
     }
+    published_root = (
+        Path(config.project_root) / ".workbench" / "published"
+        if config and config.project_root
+        else (
+            config.projects_root / config.project_id / "workbench" / "published"
+            if config and config.project_id
+            else Path("data/workbench/published")
+        )
+    )
+    published_assets = load_published_assets(root=published_root)
+    published_context = build_runtime_asset_context(published_assets)
+    published_refs = find_relevant_published_assets(query, published_context, max_items=2)
 
     if len(matched_entities) >= 2 and ("关系" in query or "关联" in query):
         unique_entities: list[str] = []
@@ -179,6 +220,8 @@ def retrieve_graph(query: str, config: GraphConfig | None = None) -> dict[str, A
                 f"{r['source_entity']} -> {r['target_entity']} ({r['relation_type']}) | {r['source']}"
                 for r in rels
             ]
+            if published_refs:
+                result["evidence"].extend([f"[published] {item['title']} | {item['path']}" for item in published_refs])
             return result
 
     if matched_entities:
@@ -196,6 +239,8 @@ def retrieve_graph(query: str, config: GraphConfig | None = None) -> dict[str, A
                 f"{item['other']} ({item['relation_type']}) | {item['source']}"
                 for item in faction_info.get("evidence", [])
             ]
+            if published_refs:
+                result["evidence"].extend([f"[published] {item['title']} | {item['path']}" for item in published_refs])
             return result
 
         character_info = query_character_context(registry, first)
@@ -205,6 +250,15 @@ def retrieve_graph(query: str, config: GraphConfig | None = None) -> dict[str, A
             f"{item['other']} ({item['relation_type']}) | {item['source']}"
             for item in character_info.get("evidence", [])
         ]
+        if published_refs:
+            result["evidence"].extend([f"[published] {item['title']} | {item['path']}" for item in published_refs])
+        return result
+
+    if published_refs:
+        result["answer_type"] = "published_asset_context"
+        result["results"] = {"published_refs": published_refs}
+        result["evidence"] = [f"[published] {item['title']} | {item['path']}" for item in published_refs]
+
         return result
 
     return result

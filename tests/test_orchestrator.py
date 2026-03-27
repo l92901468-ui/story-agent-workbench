@@ -84,6 +84,30 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("builder", out.agents_called)
         self.assertTrue(any(item.get("type") == "open_question" for item in out.builder_entries))
 
+    @patch("story_agent_workbench.orchestrator.orchestrator.find_relevant_published_assets")
+    @patch("story_agent_workbench.orchestrator.orchestrator.load_published_assets")
+    def test_published_assets_can_influence_reply(self, mock_load, mock_find) -> None:
+        mock_load.return_value = [{"asset_id": "r-1", "asset_type": "relationship_card", "status": "published"}]
+        mock_find.return_value = [
+            {
+                "asset_id": "r-1",
+                "asset_type": "relationship_card",
+                "title": "艾琳与灰塔阵营关系",
+                "path": "data/workbench/published/relationships/r-1.json",
+                "score": 2,
+            }
+        ]
+        out = orchestrate_hidden_agents(
+            query="帮我看下艾琳和灰塔关系是否矛盾",
+            mode="chat",
+            base_reply="基础回复",
+            text_evidence=[],
+            graph_evidence=[],
+            graph_results=None,
+        )
+        self.assertGreaterEqual(len(out.published_asset_refs), 1)
+        self.assertIn("已发布资产", out.final_reply)
+
 
 if __name__ == "__main__":
     unittest.main()

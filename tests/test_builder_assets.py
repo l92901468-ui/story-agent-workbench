@@ -5,6 +5,12 @@ from pathlib import Path
 
 from story_agent_workbench.orchestrator.assets import (
     BuilderAsset,
+    approve_asset,
+    build_builder_assets,
+    list_draft_assets,
+    persist_builder_assets,
+    publish_asset,
+    reject_asset,
     build_builder_assets,
     persist_builder_assets,
 )
@@ -28,6 +34,7 @@ class TestBuilderAssets(unittest.TestCase):
             graph_evidence=[],
         )
 
+        all_types = {item.asset_type for item in assets_character + assets_relationship}
         all_types = {item.type for item in assets_character + assets_relationship}
         self.assertIn("character_card", all_types)
         self.assertIn("relationship_card", all_types)
@@ -41,6 +48,8 @@ class TestBuilderAssets(unittest.TestCase):
             root = Path(tmpdir) / "workbench" / "draft"
             assets = [
                 BuilderAsset(
+                    asset_id="open-question-test",
+                    asset_type="open_question",
                     type="open_question",
                     title="待确认问题",
                     summary="测试沉淀",
@@ -57,10 +66,39 @@ class TestBuilderAssets(unittest.TestCase):
             self.assertIn("open_questions", str(saved_path))
 
             payload = json.loads(saved_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["asset_type"], "open_question")
+            self.assertEqual(payload["status"], "draft")
             self.assertEqual(payload["type"], "open_question")
             self.assertEqual(payload["source_query"], "这段是否有冲突？")
             self.assertIn("reference_sources", payload)
             self.assertIn("generated_at", payload)
+
+    def test_review_and_publish_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "workbench"
+            assets = build_builder_assets(
+                query="请整理关系卡",
+                graph_results={
+                    "answer_type": "relationship_between",
+                    "results": {"entity_a": "艾琳", "entity_b": "灰塔阵营", "relationships": []},
+                },
+                text_evidence=[],
+                graph_evidence=[],
+            )
+            saved = persist_builder_assets(assets, root=root / "draft")
+            draft_path = Path(saved[0]["path"])
+
+            drafts = list_draft_assets(root=root)
+            self.assertGreaterEqual(len(drafts), 1)
+
+            reject_asset(draft_path, note="证据不足")
+            with self.assertRaises(ValueError):
+                publish_asset(draft_path, workbench_root=root)
+
+            approve_asset(draft_path, note="可发布")
+            published_payload = publish_asset(draft_path, workbench_root=root)
+            self.assertEqual(published_payload["status"], "published")
+            self.assertIn("/published/", published_payload["published_path"])
 
 
 if __name__ == "__main__":

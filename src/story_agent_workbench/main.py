@@ -32,6 +32,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--session-id", default="default", help="Session identifier for local memory")
     parser.add_argument("--memory-turns", type=int, default=3, help="Recent turns to keep")
     parser.add_argument("--data-root", default="data/samples", help="Input docs root")
+    parser.add_argument("--project-id", default=None, help="Optional project id under projects/<project_id>/")
+    parser.add_argument("--project-root", default=None, help="Optional direct project root path")
+    parser.add_argument("--projects-root", default="projects", help="Projects root directory")
     parser.add_argument(
         "--test-file",
         action="append",
@@ -106,6 +109,11 @@ def format_human_output(payload: dict[str, Any]) -> str:
     if response.get("builder_saved_assets"):
         lines.append("\n--- builder assets saved ---")
         for item in response["builder_saved_assets"][:5]:
+            lines.append(f"[{item.get('asset_type') or item.get('type')}] {item.get('path')}")
+    if response.get("published_asset_refs"):
+        lines.append("\n--- published assets referenced (light) ---")
+        for item in response["published_asset_refs"][:2]:
+            lines.append(f"[{item.get('asset_type')}] {item.get('title')} | {item.get('path')}")
             lines.append(f"[{item.get('type')}] {item.get('path')}")
 
     text_stats = response.get("text_retrieval", {}).get("stats", {})
@@ -140,6 +148,18 @@ def run_cli(argv: list[str] | None = None) -> int:
 
     text_config = RetrievalConfig(
         data_root=Path(args.data_root),
+        project_id=args.project_id,
+        project_root=Path(args.project_root) if args.project_root else None,
+        projects_root=Path(args.projects_root),
+        chunk_size=args.chunk_size,
+        overlap=args.overlap,
+    )
+    graph_config = GraphConfig(
+        registry_path=Path(args.registry_path),
+        project_id=args.project_id,
+        project_root=Path(args.project_root) if args.project_root else None,
+        projects_root=Path(args.projects_root),
+    )
         chunk_size=args.chunk_size,
         overlap=args.overlap,
         extra_files=tuple(Path(p) for p in args.test_file),

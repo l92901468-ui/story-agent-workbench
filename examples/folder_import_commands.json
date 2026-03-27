@@ -1,0 +1,8 @@
+[
+  "python scripts/stage8c_folder_import.py --project-root projects/my_story_project",
+  "python scripts/stage8c_folder_import.py --project-root projects/my_story_project --json",
+  "PYTHONPATH=src python -m story_agent_workbench \"帮我检查这一章冲突\" --project-root projects/my_story_project",
+  "PYTHONPATH=src python scripts/stage8b_project_quality_check.py --project-root projects/my_story_project",
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --project-root projects/my_story_project check --top 5",
+  "PYTHONPATH=src python scripts/stage8c_project_session.py --project-root projects/my_story_project review --do list --status draft"
+]

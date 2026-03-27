@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from story_agent_workbench.graph.graph_retriever import GraphConfig, retrieve_graph
@@ -263,6 +264,24 @@ def generate_reply(
         text_evidence=text_evidence,
         graph_evidence=graph_evidence,
         graph_results=graph_retrieval,
+        published_root=(
+            Path(retrieval_config.project_root) / ".workbench" / "published"
+            if retrieval_config.project_root
+            else (
+                Path(retrieval_config.projects_root) / retrieval_config.project_id / "workbench" / "published"
+                if retrieval_config.project_id
+                else None
+            )
+        ),
+        draft_root=(
+            Path(retrieval_config.project_root) / ".workbench" / "assets" / "draft"
+            if retrieval_config.project_root
+            else (
+                Path(retrieval_config.projects_root) / retrieval_config.project_id / "workbench" / "draft"
+                if retrieval_config.project_id
+                else None
+            )
+        ),
     )
     reply_text = orchestration.final_reply
 
@@ -284,6 +303,7 @@ def generate_reply(
         "agents_called": orchestration.agents_called,
         "builder_entries": orchestration.builder_entries,
         "builder_saved_assets": orchestration.builder_saved_assets,
+        "published_asset_refs": orchestration.published_asset_refs,
     }
 
     if text_retrieval:
@@ -297,6 +317,7 @@ def generate_reply(
         payload["evidence"] = {
             "graph": graph_retrieval.get("evidence", []) if graph_retrieval else [],
             "text": text_retrieval.get("evidence", []) if text_retrieval else [],
+            "published": [item.get("path", "") for item in orchestration.published_asset_refs[:5]],
         }
     else:
         payload["light_citation"] = {

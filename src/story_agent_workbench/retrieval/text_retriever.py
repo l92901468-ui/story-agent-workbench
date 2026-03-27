@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,12 +21,23 @@ class RetrievalConfig:
     """Configuration for minimal text retrieval."""
 
     data_root: Path = Path("data/samples")
+    project_id: str | None = None
+    project_root: Path | None = None
+    projects_root: Path = Path("projects")
     chunk_size: int = 300
     overlap: int = 40
     extra_files: tuple[Path, ...] = ()
     extra_layer: str = "test_input"
     index_path: Path = Path("data/workbench/index/text_index.json")
     rebuild_index: bool = False
+
+
+def resolve_data_root(config: RetrievalConfig) -> Path:
+    if config.project_root:
+        return config.project_root
+    if config.project_id:
+        return config.projects_root / config.project_id
+    return config.data_root
 
 
 def tokenize(text: str) -> list[str]:
@@ -58,6 +70,15 @@ def score_chunk(query: str, chunk_text_value: str) -> float:
 def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
     """Load documents and convert them into retrieval chunks."""
 
+    root = resolve_data_root(config)
+    chunk_cache = root / ".workbench" / "chunks" / "chunks.jsonl"
+    if chunk_cache.exists():
+        lines = chunk_cache.read_text(encoding="utf-8").splitlines()
+        cached = [json.loads(line) for line in lines if line.strip()]
+        if cached:
+            return cached
+
+    documents = load_text_documents(root)
     documents = load_text_documents(config.data_root)
     all_chunks: list[dict[str, Any]] = []
     loaded_extra_files = 0

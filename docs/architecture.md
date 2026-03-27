@@ -104,6 +104,34 @@
   - 仅写 draft 资产，不覆盖 canon
   - 不接数据库，不做 UI
 
+### 3.2.10 审阅与发布流程（阶段 7C）
+- 路径：
+  - `src/story_agent_workbench/orchestrator/assets.py`
+  - `scripts/stage7c_asset_review.py`
+- 职责：
+  - 对 draft 资产执行审阅动作（approve/reject）
+  - 仅允许 approved 资产发布到 `data/workbench/published/*`
+  - 保留审阅和发布时间信息，保证可追踪
+- 状态模型：
+  - draft / approved / rejected / published
+- 对接原则：
+  - 当前不直接修改 canon 文本
+  - published 资产保留 `asset_type` 与 `metadata.target_integration`，为未来 canon/registry 映射留接口
+
+### 3.2.11 已发布资产回流（阶段 7D）
+- 共享模块路径：`src/story_agent_workbench/core/published_assets.py`
+- 职责：
+  - 加载 `data/workbench/published/*` 资产
+  - 构建运行时资产上下文
+  - 按 query 做轻量相关性匹配
+- 当前接入：
+  - orchestrator / critic / systems_designer / builder
+  - graph retriever（补充 published 引用）
+- 优先级：
+  - published 是高优先级工作事实层
+  - draft 不自动提升
+  - 不直接覆盖 canon 文本
+
 ### 3.3 文本检索模块
 - 路径：`src/story_agent_workbench/retrieval/text_retriever.py`
 - 职责：
@@ -134,6 +162,57 @@
 
 ### 3.5 ingest 模块（阶段 2 已落地）
 - `src/story_agent_workbench/ingest/`：最小文本读取与切分（loader/chunker）
+
+### 3.5.5 真实项目导入管线（阶段 8A）
+- 路径：
+  - `src/story_agent_workbench/ingest/project_importer.py`
+  - `scripts/stage8a_import_project.py`
+- 目录规范：
+  - `projects/<project_id>/canon|draft|reference|workbench`
+- 职责：
+  - 批量导入 txt/md
+  - 生成最小 metadata（project_id/layer/doc_type/chapter/scene/characters/timeline_hint）
+  - 输出导入 manifest 与质量检查告警
+
+### 3.6 预留目录
+- `src/story_agent_workbench/core/`：通用配置、类型、公共工具（后续）
+
+### 3.7 project_id 运行时接入（阶段 8A）
+- `main.py` 支持 `--project-id --projects-root`
+- text retriever 可按 `project_id` 读取 `projects/<project_id>/`
+- graph retriever 可按 `project_id` 读取 `projects/<project_id>/workbench/extracted/registry.json`
+- orchestrator/published context 继续走项目内 `workbench/published`（若存在）
+
+### 3.8 项目质量校准层（阶段 8B）
+- 路径：
+  - `src/story_agent_workbench/quality/project_quality.py`
+  - `scripts/stage8b_project_quality_check.py`
+- 职责：
+  - 对真实项目做结构性质量检查（最小版）
+  - 输出结构化问题列表（含 confidence/reason/sources）
+- 当前最小检查覆盖：
+  - 人物关系冲突
+  - 时间线/知情时点风险
+  - 伏笔未回收
+  - 阵营链条缺口
+  - draft vs canon 冲突
+  - 低置信度声明
+- 8B.1 调优要点：
+  - 引入最小阈值与过滤（低置信度过滤、doc_type 过滤、短文本过滤）
+  - 对关系冲突/时间线/伏笔未回收的误报做规则降噪
+  - issue reason/sources/entities/followup 更具体，便于人工复核
+
+### 3.9 项目工作台入口（阶段 8C）
+- 路径：`scripts/stage8c_project_session.py`
+- 统一动作：
+  - `chat`
+  - `check`
+  - `build`
+  - `review`
+- 设计目标：
+  - 单入口绑定 `project_id`
+  - 统一 JSON 输出结构
+  - 复用现有 chat/quality/builder/review 能力，降低日常使用成本
 
 ### 3.6 预留目录
 - `src/story_agent_workbench/core/`：通用配置、类型、公共工具（后续）
@@ -199,3 +278,21 @@
 - 关键路径可重复执行
 - 失败场景可复现
 - 新协作者可按文档完成最小验收
+
+### 3.10 项目文件夹直导（阶段 8D）
+- 路径：
+  - `src/story_agent_workbench/ingest/folder_import.py`
+  - `scripts/stage8c_folder_import.py`
+- 目录语义：
+  - 用户输入层：`incoming/canon/draft/reference`
+  - 系统输出层：`.workbench/*`
+- 职责：
+  - 自动补齐缺失目录
+  - 自动扫描并忽略系统目录
+  - 对 `incoming` 做最小可解释分类
+  - 分层切分（标题/对话块/段落优先，最后固定长度回退）
+  - 写入 chunks/summaries/graph seed/import report
+- 与现有模块接入：
+  - `text_retriever` 优先读取 `.workbench/chunks/chunks.jsonl`
+  - `graph_retriever` 可读取 `.workbench/graph/registry_seed.json`
+  - `project_quality` 会复用 `.workbench/logs/import_report.json`

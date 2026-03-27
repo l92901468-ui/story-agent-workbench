@@ -1,0 +1,23 @@
+[
+  {
+    "case_id": "should_report_relationship_conflict",
+    "project_id": "p_quality",
+    "expect_issue_types": ["relationship_conflict"],
+    "expect_not_issue_types": [],
+    "note": "同一角色对在不同来源出现合作/冲突且缺过渡。"
+  },
+  {
+    "case_id": "should_not_report_foreshadow_without_link",
+    "project_id": "p_noise",
+    "expect_issue_types": [],
+    "expect_not_issue_types": ["foreshadowing_unresolved"],
+    "note": "伏笔条目与正文无关键词关联，不应触发未回收。"
+  },
+  {
+    "case_id": "timeline_risk_requires_strong_early_knowledge",
+    "project_id": "p_timeline",
+    "expect_issue_types": ["timeline_knowledge_risk"],
+    "expect_not_issue_types": [],
+    "note": "只有“早就知道/早已知道”等强词 + 首次得知冲突才报。"
+  }
+]
