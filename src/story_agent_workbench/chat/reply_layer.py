@@ -84,7 +84,8 @@ def _try_llm_reply(
     graph_retrieval: dict[str, Any] | None,
     memory_turns: list[dict[str, Any]],
 ) -> str | None:
-    if not os.getenv("OPENAI_API_KEY"):
+    api_key = os.getenv("API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
         return None
 
     try:
@@ -110,7 +111,7 @@ def _try_llm_reply(
     prompt = "\n".join([f"用户问题：{query}", *context_lines])
 
     try:
-        client = OpenAI()
+        client = OpenAI(api_key=api_key)
         model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         response = client.responses.create(model=model, input=prompt)
         text = getattr(response, "output_text", None)

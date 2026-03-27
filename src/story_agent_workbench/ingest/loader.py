@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from zipfile import ZipFile
 from typing import Iterable
 
-SUPPORTED_SUFFIXES = {".txt", ".md"}
+SUPPORTED_SUFFIXES = {".txt", ".md", ".docx", ".doc"}
 KNOWN_LAYERS = {"canon", "draft", "reference"}
 SYSTEM_DIR_NAMES = {".workbench", "workbench", "published", "cache", "logs", "__pycache__", ".git"}
 
@@ -65,7 +66,7 @@ def load_text_documents(root_dir: Path | str) -> list[TextDocument]:
     documents: list[TextDocument] = []
 
     for file_path in discover_text_documents(root_path):
-        text = file_path.read_text(encoding="utf-8")
+        text = read_text_file(file_path)
         try:
             source = str(file_path.relative_to(root_path))
         except ValueError:
@@ -80,6 +81,62 @@ def load_text_documents(root_dir: Path | str) -> list[TextDocument]:
         )
 
     return documents
+
+
+def _extract_docx_text(path: Path) -> str:
+    """Extract basic text from .docx without external dependencies."""
+
+    with ZipFile(path, "r") as zf:
+        xml_bytes = zf.read("word/document.xml")
+
+    xml_text = xml_bytes.decode("utf-8", errors="ignore")
+    # Remove tags and keep spacing between paragraphs/runs.
+    plain = xml_text.replace("</w:p>", "\n").replace("</w:tr>", "\n")
+    plain = plain.replace("</w:tab>", "\t").replace("</w:t>", "")
+    out: list[str] = []
+    in_tag = False
+    for ch in plain:
+        if ch == "<":
+            in_tag = True
+            continue
+        if ch == ">":
+            in_tag = False
+            continue
+        if not in_tag:
+            out.append(ch)
+    return "".join(out).strip()
+
+
+def _extract_doc_text(path: Path) -> str:
+    """Best-effort text extraction for legacy .doc binary files."""
+
+    raw = path.read_bytes()
+    # Extract printable bytes as a rough fallback. This is not perfect, but avoids extra dependencies.
+    chars: list[str] = []
+    for b in raw:
+        if 32 <= b <= 126 or b in (9, 10, 13):
+            chars.append(chr(b))
+        elif b >= 160:
+            chars.append(chr(b))
+        else:
+            chars.append(" ")
+    text = "".join(chars)
+    # Collapse noisy whitespace.
+    return " ".join(text.split())
+
+
+def read_text_file(path: Path | str) -> str:
+    """Read supported text-like files (.txt/.md/.docx/.doc) as plain text."""
+
+    file_path = Path(path)
+    suffix = file_path.suffix.lower()
+    if suffix in {".txt", ".md"}:
+        return file_path.read_text(encoding="utf-8")
+    if suffix == ".docx":
+        return _extract_docx_text(file_path)
+    if suffix == ".doc":
+        return _extract_doc_text(file_path)
+    raise ValueError(f"unsupported file type: {suffix}")
 
 
 def summarize_documents(documents: Iterable[TextDocument]) -> str:

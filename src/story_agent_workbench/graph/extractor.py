@@ -21,7 +21,7 @@ def _normalize_id(prefix: str, name: str) -> str:
 
 
 def _extract_with_llm(text: str) -> dict[str, Any] | None:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         return None
 

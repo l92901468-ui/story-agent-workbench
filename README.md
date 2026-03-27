@@ -119,6 +119,28 @@ PYTHONPATH=src python -m story_agent_workbench "灰塔 线索"
 PYTHONPATH=src python -m story_agent_workbench "罗安 冲突" --top-k 2 --data-root data/samples --chunk-size 300 --overlap 40
 ```
 
+临时传入测试文件并立即接入 RAG（会自动切块，仅对本次运行生效）：
+
+```bash
+PYTHONPATH=src python -m story_agent_workbench "帮我看这段设定是否冲突" --test-file /path/to/test_story.txt
+```
+
+持久化本地索引（跨运行复用）：
+
+```bash
+PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --index-path data/workbench/index/text_index.json
+```
+
+首次重建索引可加：
+
+```bash
+PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --rebuild-index
+```
+
+`--test-file` 当前支持文本类：`.txt` / `.docx` / `.doc`（`.doc` 为 best-effort 提取）。
+
+仓库已预留临时上传目录：`data/workbench/uploads/`（用于后续放用户传入文件）。
+
 如果你想看完整结构化输出（包含 evidence/results/stats）：
 
 ```bash
@@ -170,7 +192,7 @@ PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --mode evidence -
 PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --mode evidence --json
 ```
 
-> 说明：LLM 调用是可选能力。若环境中没有配置 `OPENAI_API_KEY`（或没有 openai 包），会自动回退到本地规则回复。
+> 说明：LLM 调用是可选能力。若环境中没有配置 `API_KEY`（或 `OPENAI_API_KEY`，或没有 openai 包），会自动回退到本地规则回复。
 
 
 ## 阶段 3.6：聊天层收尾与体验稳定
@@ -320,10 +342,10 @@ PYTHONPATH=src python -m unittest discover -s tests -p "test_*.py" -v
 ### 内部角色
 
 - `orchestrator`：统一调度
-- `story_buddy`：默认陪聊剧情（不每轮都提建议）
-- `critic`：按需做一致性/冲突检查
-- `systems_designer`：问题偏玩法结构时给设计视角
-- `builder`：按需沉淀结构化条目（角色卡/关系卡/未决问题）
+- `story_buddy`：默认陪聊剧情（LLM 优先润色）
+- `critic`：按需做一致性/冲突检查（LLM 优先）
+- `systems_designer`：问题偏玩法结构时给设计视角（LLM 优先）
+- `builder`：按需沉淀结构化条目（角色卡/关系卡/未决问题，LLM 优先补 summary）
 
 ### 使用方式（外部入口不变）
 
