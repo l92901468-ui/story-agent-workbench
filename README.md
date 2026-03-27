@@ -139,6 +139,8 @@ PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --rebuild-index
 
 `--test-file` 当前支持文本类：`.txt` / `.docx` / `.doc`（`.doc` 为 best-effort 提取）。
 
+仓库已预留临时上传目录：`data/workbench/uploads/`（用于后续放用户传入文件）。
+
 如果你想看完整结构化输出（包含 evidence/results/stats）：
 
 ```bash
