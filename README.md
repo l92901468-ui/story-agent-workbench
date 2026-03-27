@@ -125,6 +125,20 @@ PYTHONPATH=src python -m story_agent_workbench "罗安 冲突" --top-k 2 --data-
 PYTHONPATH=src python -m story_agent_workbench "帮我看这段设定是否冲突" --test-file /path/to/test_story.txt
 ```
 
+持久化本地索引（跨运行复用）：
+
+```bash
+PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --index-path data/workbench/index/text_index.json
+```
+
+首次重建索引可加：
+
+```bash
+PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --rebuild-index
+```
+
+`--test-file` 当前支持文本类：`.txt` / `.docx` / `.doc`（`.doc` 为 best-effort 提取）。
+
 如果你想看完整结构化输出（包含 evidence/results/stats）：
 
 ```bash
