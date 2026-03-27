@@ -1,8 +1,13 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from story_agent_workbench.retrieval.text_retriever import RetrievalConfig, retrieve_text
+from story_agent_workbench.retrieval.text_retriever import (
+    RetrievalConfig,
+    _pre_chunk_user_text,
+    retrieve_text,
+)
 
 
 class TestTextRetriever(unittest.TestCase):
@@ -47,6 +52,36 @@ class TestTextRetriever(unittest.TestCase):
             )
             self.assertGreaterEqual(len(result_second["results"]), 1)
             self.assertGreaterEqual(result_second["stats"].get("index_chunks_updated", 0), 0)
+
+    def test_pre_chunk_user_file_uses_5000_chars(self) -> None:
+        text = "a" * 12050
+        chunks = _pre_chunk_user_text(text)
+        self.assertEqual(len(chunks), 3)
+        self.assertEqual(len(chunks[0]), 5000)
+        self.assertEqual(len(chunks[1]), 5000)
+        self.assertEqual(len(chunks[2]), 2050)
+
+    @patch("story_agent_workbench.retrieval.text_retriever._llm_refine_upload_chunks")
+    def test_retrieve_with_ad_hoc_file_uses_llm_refined_segments(self, mock_refine) -> None:
+        with TemporaryDirectory() as tmpdir:
+            ad_hoc = Path(tmpdir) / "demo_test_file.txt"
+            ad_hoc.write_text("第一段。\n第二段。\n第三段。", encoding="utf-8")
+            index_path = Path(tmpdir) / "index" / "text_index.json"
+            mock_refine.return_value = ["第一段。第二段。", "第三段。"]
+
+            result = retrieve_text(
+                query="第三段",
+                top_k=2,
+                config=RetrievalConfig(
+                    data_root=Path(tmpdir) / "missing_root",
+                    extra_files=(ad_hoc,),
+                    index_path=index_path,
+                    rebuild_index=True,
+                ),
+            )
+
+            self.assertTrue(any("#seg_" in item["source"] for item in result["results"]))
+            self.assertEqual(result["stats"]["upload_pre_chunk_size"], 5000)
 
 
 if __name__ == "__main__":

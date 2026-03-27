@@ -46,13 +46,9 @@ class BuilderAsset:
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
-        # Keep compatibility with stage-7B output readers.
-        data["type"] = self.asset_type
+        data["asset_type"] = self.asset_type
+        data["type"] = self.type
         return data
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 def _now_iso() -> str:
@@ -60,8 +56,7 @@ def _now_iso() -> str:
 
 
 def _new_asset_id(asset_type: str) -> str:
-    prefix = asset_type.replace("_", "-")
-    return f"{prefix}-{uuid4().hex[:10]}"
+    return f"{asset_type.replace('_', '-')}-{uuid4().hex[:10]}"
 
 
 def _make_asset(
@@ -80,12 +75,12 @@ def _make_asset(
     return BuilderAsset(
         asset_id=_new_asset_id(asset_type),
         asset_type=asset_type,
+        type=asset_type,
         title=title,
         summary=summary,
         source_query=query,
         reference_sources=refs,
         generated_at=now,
-        status="draft",
         metadata=merged_metadata,
     )
 
@@ -97,35 +92,31 @@ def _extract_reference_sources(
     graph_evidence: list[str],
 ) -> list[str]:
     refs: list[str] = []
-
     for item in text_evidence:
         parts = [part.strip() for part in item.split("|")]
-        if len(parts) >= 2:
+        if len(parts) >= 2 and parts[1]:
             refs.append(parts[1])
 
     for item in graph_evidence:
         if "|" in item:
             refs.append(item.split("|")[-1].strip())
 
-    if graph_results:
-        result_obj = graph_results.get("results", {})
-        if isinstance(result_obj, dict):
-            evidence = result_obj.get("evidence", [])
-            if isinstance(evidence, list):
-                for ev in evidence:
-                    if isinstance(ev, dict):
-                        source = str(ev.get("source", "")).strip()
-                        if source:
-                            refs.append(source)
+    if graph_results and isinstance(graph_results.get("results"), dict):
+        evidence = graph_results["results"].get("evidence", [])
+        if isinstance(evidence, list):
+            for ev in evidence:
+                if isinstance(ev, dict):
+                    source = str(ev.get("source", "")).strip()
+                    if source:
+                        refs.append(source)
 
-    unique = []
+    deduped: list[str] = []
     seen = set()
     for ref in refs:
-        if not ref or ref in seen:
-            continue
-        seen.add(ref)
-        unique.append(ref)
-    return unique[:8]
+        if ref and ref not in seen:
+            seen.add(ref)
+            deduped.append(ref)
+    return deduped[:12]
 
 
 def build_builder_assets(
@@ -144,15 +135,9 @@ def build_builder_assets(
         graph_evidence=graph_evidence,
     )
     if published_asset_refs:
-        refs = [*refs, *[str(item.get("path", "")) for item in published_asset_refs if item.get("path")]]
-        dedup: list[str] = []
-        seen = set()
-        for ref in refs:
-            if not ref or ref in seen:
-                continue
-            seen.add(ref)
-            dedup.append(ref)
-        refs = dedup[:12]
+        refs.extend(str(item.get("path", "")) for item in published_asset_refs if item.get("path"))
+        refs = [r for i, r in enumerate(refs) if r and r not in refs[:i]][:12]
+
     now = _now_iso()
     assets: list[BuilderAsset] = []
 
@@ -170,13 +155,6 @@ def build_builder_assets(
                     query=query,
                     refs=refs,
                     now=now,
-                BuilderAsset(
-                    type="character_card",
-                    title=f"{character} 角色卡",
-                    summary=f"角色 {character} 的当前关系上下文（draft）。",
-                    source_query=query,
-                    reference_sources=refs,
-                    generated_at=now,
                     metadata={"character": character, "graph_answer_type": answer_type},
                 )
             )
@@ -190,18 +168,11 @@ def build_builder_assets(
                     query=query,
                     refs=refs,
                     now=now,
-                BuilderAsset(
-                    type="relationship_card",
-                    title=f"关系卡：{answer_type}",
-                    summary="从本轮图检索结果沉淀的关系结构（draft）。",
-                    source_query=query,
-                    reference_sources=refs,
-                    generated_at=now,
                     metadata={"graph_answer_type": answer_type, "graph_results": result_obj},
                 )
             )
 
-    if any(hint in query for hint in EVENT_HINTS):
+    if any(h in query for h in EVENT_HINTS):
         assets.append(
             _make_asset(
                 asset_type="event_card",
@@ -210,17 +181,10 @@ def build_builder_assets(
                 query=query,
                 refs=refs,
                 now=now,
-            BuilderAsset(
-                type="event_card",
-                title="事件卡（草稿）",
-                summary="本轮问题包含事件/行动信号，建议补齐时间点、参与者和结果。",
-                source_query=query,
-                reference_sources=refs,
-                generated_at=now,
             )
         )
 
-    if any(hint in query for hint in FORESHADOWING_HINTS):
+    if any(h in query for h in FORESHADOWING_HINTS):
         assets.append(
             _make_asset(
                 asset_type="foreshadowing_item",
@@ -229,17 +193,10 @@ def build_builder_assets(
                 query=query,
                 refs=refs,
                 now=now,
-            BuilderAsset(
-                type="foreshadowing_item",
-                title="伏笔条目（待回收）",
-                summary="记录本轮提及的伏笔/暗示，后续在 canon 中确认回收位置。",
-                source_query=query,
-                reference_sources=refs,
-                generated_at=now,
             )
         )
 
-    if any(hint in query for hint in SYSTEMS_HINTS):
+    if any(h in query for h in SYSTEMS_HINTS):
         assets.append(
             _make_asset(
                 asset_type="gameplay_hook",
@@ -248,13 +205,6 @@ def build_builder_assets(
                 query=query,
                 refs=refs,
                 now=now,
-            BuilderAsset(
-                type="gameplay_hook",
-                title="玩法钩子（草稿）",
-                summary="从本轮问题沉淀一个可执行的玩法互动切入点。",
-                source_query=query,
-                reference_sources=refs,
-                generated_at=now,
             )
         )
 
@@ -267,13 +217,6 @@ def build_builder_assets(
             refs=refs,
             now=now,
             metadata={"published_refs_used": len(published_asset_refs or [])},
-        BuilderAsset(
-            type="open_question",
-            title="待确认问题",
-            summary=f"{query}（后续补 canon 证据与结论）",
-            source_query=query,
-            reference_sources=refs,
-            generated_at=now,
         )
     )
 
@@ -298,7 +241,6 @@ def persist_builder_assets(
 
     for idx, asset in enumerate(assets, start=1):
         folder_name = ASSET_DIR_MAP.get(asset.asset_type)
-        folder_name = ASSET_DIR_MAP.get(asset.type)
         if not folder_name:
             continue
 
@@ -306,7 +248,6 @@ def persist_builder_assets(
         out_dir.mkdir(parents=True, exist_ok=True)
 
         filename = f"{ts}_{idx:02d}_{asset.asset_id}_{_safe_slug(asset.title)}.json"
-        filename = f"{ts}_{idx:02d}_{_safe_slug(asset.title)}.json"
         file_path = out_dir / filename
         file_path.write_text(json.dumps(asset.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -314,14 +255,11 @@ def persist_builder_assets(
             {
                 "asset_id": asset.asset_id,
                 "asset_type": asset.asset_type,
-                "title": asset.title,
-                "path": str(file_path),
-                "generated_at": asset.generated_at,
-                "status": asset.status,
                 "type": asset.type,
                 "title": asset.title,
                 "path": str(file_path),
                 "generated_at": asset.generated_at,
+                "status": asset.status,
             }
         )
 
@@ -332,6 +270,8 @@ def load_asset(path: Path | str) -> dict[str, Any]:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if "asset_type" not in data and "type" in data:
         data["asset_type"] = data["type"]
+    if "type" not in data and "asset_type" in data:
+        data["type"] = data["asset_type"]
     return data
 
 
@@ -356,12 +296,7 @@ def list_draft_assets(*, root: Path | str = Path("data/workbench")) -> list[dict
     return assets
 
 
-def review_asset(
-    asset_path: Path | str,
-    *,
-    status: str,
-    note: str | None = None,
-) -> dict[str, Any]:
+def review_asset(asset_path: Path | str, *, status: str, note: str | None = None) -> dict[str, Any]:
     if status not in {"approved", "rejected"}:
         raise ValueError("review status must be approved or rejected")
     path = Path(asset_path)
@@ -383,15 +318,10 @@ def reject_asset(asset_path: Path | str, note: str | None = None) -> dict[str, A
     return review_asset(asset_path, status="rejected", note=note)
 
 
-def publish_asset(
-    asset_path: Path | str,
-    *,
-    workbench_root: Path | str = Path("data/workbench"),
-) -> dict[str, Any]:
+def publish_asset(asset_path: Path | str, *, workbench_root: Path | str = Path("data/workbench")) -> dict[str, Any]:
     path = Path(asset_path)
     payload = load_asset(path)
-    status = payload.get("status", "draft")
-    if status != "approved":
+    if payload.get("status", "draft") != "approved":
         raise ValueError("only approved assets can be published")
 
     asset_type = payload.get("asset_type", payload.get("type", ""))

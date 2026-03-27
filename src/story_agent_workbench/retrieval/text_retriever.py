@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import math
 import re
 import json
+import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,7 @@ from story_agent_workbench.ingest import chunk_text, load_text_documents
 from story_agent_workbench.ingest.loader import read_text_file
 
 TOKEN_SPLIT_RE = re.compile(r"[^\w\u4e00-\u9fff]+", re.UNICODE)
+UPLOAD_PRE_CHUNK_SIZE = 5000
 
 
 @dataclass(frozen=True)
@@ -40,11 +43,80 @@ def resolve_data_root(config: RetrievalConfig) -> Path:
     return config.data_root
 
 
+def resolve_index_path(config: RetrievalConfig) -> Path:
+    """Resolve index path, using project-local index by default for project mode."""
+
+    default_index = Path("data/workbench/index/text_index.json")
+    if config.index_path != default_index:
+        return config.index_path
+
+    root = resolve_data_root(config)
+    if config.project_root or config.project_id:
+        return root / ".workbench" / "index" / "text_index.json"
+    return config.index_path
+
+
 def tokenize(text: str) -> list[str]:
     """Tokenize text with a lightweight regex-based splitter."""
 
     parts = TOKEN_SPLIT_RE.split(text.lower())
     return [p for p in parts if p]
+
+
+def _pre_chunk_user_text(text: str, chunk_size: int = UPLOAD_PRE_CHUNK_SIZE) -> list[str]:
+    cleaned = text.strip()
+    if not cleaned:
+        return []
+    return [cleaned[i : i + chunk_size] for i in range(0, len(cleaned), chunk_size)]
+
+
+def _llm_refine_upload_chunks(*, query_hint: str, coarse_chunks: list[str]) -> list[str] | None:
+    """Use LLM to refine 5000-char coarse chunks into semantic segments."""
+
+    api_key = os.getenv("API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
+    if not api_key or not coarse_chunks:
+        return None
+
+    prompt = (
+        "你是文本预处理助手。输入是一组长文本分块。请把每一块继续细分成更适合检索的小段，"
+        "每段尽量语义完整，不要改写原文，不要遗漏内容。"
+        "只返回 JSON 数组，数组元素是字符串。"
+    )
+    user_payload = json.dumps({"hint": query_hint, "chunks": coarse_chunks}, ensure_ascii=False)
+    payload = {
+        "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        "max_output_tokens": 1600,
+        "input": [
+            {"role": "system", "content": [{"type": "input_text", "text": prompt}]},
+            {"role": "user", "content": [{"type": "input_text", "text": user_payload}]},
+        ],
+        "metadata": {"agent_role": "upload_segment_refiner"},
+    }
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+        return None
+
+    output_text = str(data.get("output_text", "")).strip()
+    if not output_text:
+        return None
+    try:
+        parsed = json.loads(output_text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, list):
+        return None
+
+    refined = [str(item).strip() for item in parsed if str(item).strip()]
+    return refined or None
 
 
 def score_chunk(query: str, chunk_text_value: str) -> float:
@@ -79,7 +151,6 @@ def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
             return cached
 
     documents = load_text_documents(root)
-    documents = load_text_documents(config.data_root)
     all_chunks: list[dict[str, Any]] = []
     loaded_extra_files = 0
     skipped_extra_files = 0
@@ -108,20 +179,25 @@ def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
             continue
 
         loaded_extra_files += 1
-        all_chunks.extend(
-            chunk_text(
-                text=text,
-                source=str(path),
-                layer=config.extra_layer,
-                chunk_size=config.chunk_size,
-                overlap=config.overlap,
+        coarse_chunks = _pre_chunk_user_text(text, chunk_size=UPLOAD_PRE_CHUNK_SIZE)
+        refined_chunks = _llm_refine_upload_chunks(query_hint=path.name, coarse_chunks=coarse_chunks)
+        segments = refined_chunks if refined_chunks else coarse_chunks
+        for seg_idx, segment in enumerate(segments):
+            all_chunks.extend(
+                chunk_text(
+                    text=segment,
+                    source=f"{path}#seg_{seg_idx:03d}",
+                    layer=config.extra_layer,
+                    chunk_size=config.chunk_size,
+                    overlap=config.overlap,
+                )
             )
-        )
 
     build_chunks.last_build_stats = {
         "extra_files_requested": len(config.extra_files),
         "extra_files_loaded": loaded_extra_files,
         "extra_files_skipped": skipped_extra_files,
+        "upload_pre_chunk_size": UPLOAD_PRE_CHUNK_SIZE,
     }
 
     return all_chunks
@@ -226,12 +302,13 @@ def retrieve_text(
         config = RetrievalConfig()
 
     chunks = build_chunks(config)
-    index_data = _load_persistent_index(config.index_path)
+    index_path = resolve_index_path(config)
+    index_data = _load_persistent_index(index_path)
     if config.rebuild_index:
         index_data = {"chunks": []}
 
     inserted, updated = _upsert_chunks_to_index(index_data, chunks)
-    _save_persistent_index(config.index_path, index_data.get("chunks", []))
+    _save_persistent_index(index_path, index_data.get("chunks", []))
 
     indexed_chunks = index_data.get("chunks", [])
     query_vector = _vectorize_text(query)
@@ -270,7 +347,7 @@ def retrieve_text(
         "stats": {
             "total_chunks": len(indexed_chunks),
             "matched_chunks": len(scored_results),
-            "index_path": str(config.index_path),
+            "index_path": str(index_path),
             "index_chunks_inserted": inserted,
             "index_chunks_updated": updated,
             **getattr(build_chunks, "last_build_stats", {}),
