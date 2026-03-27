@@ -32,7 +32,7 @@ def orchestrate_hidden_agents(
     """Decide which internal roles to call while keeping single front reply."""
 
     agents_called: list[str] = ["orchestrator", "story_buddy"]
-    final_reply = story_buddy_role(base_reply=base_reply)
+    final_reply = story_buddy_role(query=query, base_reply=base_reply)
     builder_entries: list[dict[str, Any]] = []
     builder_saved_assets: list[dict[str, Any]] = []
 
@@ -42,7 +42,7 @@ def orchestrate_hidden_agents(
 
     if needs_critic:
         agents_called.append("critic")
-        critique = critic_role(graph_evidence=graph_evidence, text_evidence=text_evidence)
+        critique = critic_role(query=query, graph_evidence=graph_evidence, text_evidence=text_evidence)
         final_reply += "\n\n另外，我先帮你做了一个内部一致性检查：" + critique
 
     if needs_systems:
@@ -59,8 +59,6 @@ def orchestrate_hidden_agents(
             graph_evidence=graph_evidence,
         )
         final_reply += "\n\n我还顺手整理了可沉淀条目，并已保存到 workbench draft 资产区。"
-        builder_entries = builder_role(query=query, graph_results=graph_results)
-        final_reply += "\n\n我还顺手整理了可沉淀条目（可选查看）。"
 
     return OrchestrationResult(
         final_reply=final_reply,

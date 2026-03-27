@@ -170,7 +170,7 @@ PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --mode evidence -
 PYTHONPATH=src python -m story_agent_workbench "灰塔 线索" --mode evidence --json
 ```
 
-> 说明：LLM 调用是可选能力。若环境中没有配置 `OPENAI_API_KEY`（或没有 openai 包），会自动回退到本地规则回复。
+> 说明：LLM 调用是可选能力。若环境中没有配置 `API_KEY`（或 `OPENAI_API_KEY`，或没有 openai 包），会自动回退到本地规则回复。
 
 
 ## 阶段 3.6：聊天层收尾与体验稳定
@@ -320,10 +320,10 @@ PYTHONPATH=src python -m unittest discover -s tests -p "test_*.py" -v
 ### 内部角色
 
 - `orchestrator`：统一调度
-- `story_buddy`：默认陪聊剧情（不每轮都提建议）
-- `critic`：按需做一致性/冲突检查
-- `systems_designer`：问题偏玩法结构时给设计视角
-- `builder`：按需沉淀结构化条目（角色卡/关系卡/未决问题）
+- `story_buddy`：默认陪聊剧情（LLM 优先润色）
+- `critic`：按需做一致性/冲突检查（LLM 优先）
+- `systems_designer`：问题偏玩法结构时给设计视角（LLM 优先）
+- `builder`：按需沉淀结构化条目（角色卡/关系卡/未决问题，LLM 优先补 summary）
 
 ### 使用方式（外部入口不变）
 
