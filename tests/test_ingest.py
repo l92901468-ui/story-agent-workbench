@@ -1,8 +1,10 @@
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from zipfile import ZipFile
 
 from story_agent_workbench.ingest.chunker import chunk_text
-from story_agent_workbench.ingest.loader import discover_text_documents, load_text_documents
+from story_agent_workbench.ingest.loader import discover_text_documents, load_text_documents, read_text_file
 
 
 class TestIngest(unittest.TestCase):
@@ -28,6 +30,26 @@ class TestIngest(unittest.TestCase):
         first = chunks[0]
         for field in ("chunk_id", "source", "layer", "text"):
             self.assertIn(field, first)
+
+    def test_read_txt_docx_doc_files(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            txt_path = root / "demo.txt"
+            txt_path.write_text("txt内容", encoding="utf-8")
+
+            docx_path = root / "demo.docx"
+            with ZipFile(docx_path, "w") as zf:
+                zf.writestr(
+                    "word/document.xml",
+                    "<w:document><w:body><w:p><w:r><w:t>docx内容</w:t></w:r></w:p></w:body></w:document>",
+                )
+
+            doc_path = root / "demo.doc"
+            doc_path.write_bytes(b"legacy doc content")
+
+            self.assertIn("txt内容", read_text_file(txt_path))
+            self.assertIn("docx内容", read_text_file(docx_path))
+            self.assertIn("legacy doc content", read_text_file(doc_path))
 
 
 if __name__ == "__main__":
