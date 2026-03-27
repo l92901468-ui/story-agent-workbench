@@ -2,32 +2,24 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import json
 import os
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
-from .assets import build_builder_assets, persist_builder_assets
+from .assets import BuilderAsset, build_builder_assets, persist_builder_assets
 
 
 def _resolve_api_key() -> str:
-    """Resolve API key from preferred env vars.
-
-    Priority:
-    1) API_KEY
-    2) OPENAI_API_KEY
-    """
-
     return os.getenv("API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
 
 
 def _call_role_llm(*, role_name: str, system_prompt: str, user_prompt: str, max_output_tokens: int = 260) -> str | None:
-    """Call OpenAI Responses API for one internal role.
-
-    Returns None on any error so caller can safely fallback to local templates.
-    """
+    """Call OpenAI Responses API for one internal role; return None on any failure."""
 
     api_key = _resolve_api_key()
     if not api_key:
@@ -64,8 +56,6 @@ def _call_role_llm(*, role_name: str, system_prompt: str, user_prompt: str, max_
 
 
 def story_buddy_role(*, query: str, base_reply: str) -> str:
-    """Default companion tone: keep reply natural and collaborative."""
-
     llm = _call_role_llm(
         role_name="story_buddy",
         system_prompt=(
@@ -78,32 +68,28 @@ def story_buddy_role(*, query: str, base_reply: str) -> str:
     return llm if llm else base_reply
 
 
-def critic_role(*, query: str, graph_evidence: list[str], text_evidence: list[str]) -> str:
+def critic_role(
+    *,
+    query: str,
+    graph_evidence: list[str],
+    text_evidence: list[str],
+    published_asset_refs: list[dict[str, Any]] | None = None,
+) -> str:
     llm = _call_role_llm(
         role_name="critic",
-        system_prompt=(
-            "你是叙事一致性审校角色。请根据给定证据，输出 2-3 条可执行的风险检查点。"
-            "要简短、具体，避免空话。"
-        ),
+        system_prompt="你是叙事一致性审校角色。请根据证据给出 2-3 条可执行的风险检查点。",
         user_prompt=(
             f"用户问题：{query}\n"
             f"图证据：{graph_evidence[:3]}\n"
-            f"文本证据：{text_evidence[:3]}"
+            f"文本证据：{text_evidence[:3]}\n"
+            f"已发布资产参考：{published_asset_refs[:3] if published_asset_refs else []}"
         ),
         max_output_tokens=220,
     )
     if llm:
         return llm
 
-def critic_role(
-    *,
-    graph_evidence: list[str],
-    text_evidence: list[str],
-    published_asset_refs: list[dict[str, Any]] | None = None,
-) -> str:
-    published_hint = ""
-    if published_asset_refs:
-        published_hint = f"（并参考了 {len(published_asset_refs)} 条已发布资产）"
+    published_hint = f"（并参考了 {len(published_asset_refs)} 条已发布资产）" if published_asset_refs else ""
     if graph_evidence:
         return f"建议优先核对角色关系与阵营链条是否前后一致，再确认信息揭示时点是否过早。{published_hint}"
     if text_evidence:
@@ -112,70 +98,19 @@ def critic_role(
 
 
 def systems_designer_role(*, query: str, published_asset_refs: list[dict[str, Any]] | None = None) -> str:
-    base = (
-        "从玩法/互动设计角度，可以把这一段拆成“目标-反馈-代价”三步，"
-        "让玩家行为与叙事结果形成闭环。"
-    )
-    if published_asset_refs:
-        base += f"（已对齐 {len(published_asset_refs)} 条已发布资产）"
-    return base
-def critic_role(*, graph_evidence: list[str], text_evidence: list[str]) -> str:
-    if graph_evidence:
-        return "建议优先核对角色关系与阵营链条是否前后一致，再确认信息揭示时点是否过早。"
-    if text_evidence:
-        return "建议先检查这几段证据对应的设定是否互相冲突，尤其是角色动机变化。"
-    return "当前证据偏少，先标记潜在冲突点，后续补更多依据再做结论。"
-
-
-def systems_designer_role(*, query: str) -> str:
     llm = _call_role_llm(
         role_name="systems_designer",
-        system_prompt=(
-            "你是叙事玩法设计顾问。请给出一个最小可执行的玩法结构建议，"
-            "格式为“目标-反馈-代价”，控制在 2-4 句话。"
-        ),
+        system_prompt="你是叙事玩法设计顾问。请给出一个最小可执行的玩法结构建议（目标-反馈-代价）。",
         user_prompt=f"用户问题：{query}",
         max_output_tokens=220,
     )
     if llm:
         return llm
 
-    return (
-        "从玩法/互动设计角度，可以把这一段拆成“目标-反馈-代价”三步，"
-        "让玩家行为与叙事结果形成闭环。"
-    )
-
-
-def _summarize_builder_entries_with_llm(*, query: str, entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Use LLM to enrich builder entries summary field (best-effort)."""
-
-    llm = _call_role_llm(
-        role_name="builder",
-        system_prompt=(
-            "你是叙事资产整理助手。请把输入的 JSON 数组原样返回，但为每项补充/更新 summary 字段，"
-            "要求 summary 是一句可执行说明。只返回 JSON。"
-        ),
-        user_prompt=f"用户问题：{query}\nentries={json.dumps(entries, ensure_ascii=False)}",
-        max_output_tokens=450,
-    )
-    if not llm:
-        return entries
-
-    try:
-        parsed = json.loads(llm)
-    except json.JSONDecodeError:
-        return entries
-
-    if not isinstance(parsed, list):
-        return entries
-
-    normalized: list[dict[str, Any]] = []
-    for item in parsed:
-        if not isinstance(item, dict):
-            continue
-        normalized.append(item)
-
-    return normalized if normalized else entries
+    base = "从玩法/互动设计角度，可以把这一段拆成“目标-反馈-代价”三步，让玩家行为与叙事结果形成闭环。"
+    if published_asset_refs:
+        base += f"（已对齐 {len(published_asset_refs)} 条已发布资产）"
+    return base
 
 
 def builder_role(
@@ -189,7 +124,13 @@ def builder_role(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Return and persist stage-7B structured draft assets for 沉淀."""
 
-    assets = build_builder_assets(
+    assets = _build_assets_with_llm(
+        query=query,
+        graph_results=graph_results,
+        text_evidence=text_evidence,
+        graph_evidence=graph_evidence,
+        published_asset_refs=published_asset_refs,
+    ) or build_builder_assets(
         query=query,
         graph_results=graph_results,
         text_evidence=text_evidence,
@@ -198,29 +139,101 @@ def builder_role(
     )
     entries = [
         {
-            "type": asset.asset_type,
+            "type": asset.type,
             "asset_id": asset.asset_id,
             "asset_type": asset.asset_type,
-    )
-    entries = [
-        {
-            "type": asset.type,
             "title": asset.title,
             "summary": asset.summary,
             "source_query": asset.source_query,
             "reference_sources": asset.reference_sources,
             "generated_at": asset.generated_at,
-            "generation_tag": asset.generation_tag,
             "status": asset.status,
-            "reviewed_at": asset.reviewed_at,
-            "review_note": asset.review_note,
             "metadata": asset.metadata,
+            # backward compatibility for old callers/tests
+            "content": asset.summary,
         }
         for asset in assets
     ]
     saved = persist_builder_assets(assets, root=draft_root or Path("data/workbench/draft"))
     return entries, saved
 
-    entries = _summarize_builder_entries_with_llm(query=query, entries=entries)
-    saved = persist_builder_assets(assets)
-    return entries, saved
+
+def _build_assets_with_llm(
+    *,
+    query: str,
+    graph_results: dict[str, Any] | None,
+    text_evidence: list[str],
+    graph_evidence: list[str],
+    published_asset_refs: list[dict[str, Any]] | None,
+) -> list[BuilderAsset] | None:
+    """Build builder assets using LLM first, fallback handled by caller."""
+
+    llm = _call_role_llm(
+        role_name="builder",
+        system_prompt=(
+            "你是叙事资产构建代理。请把输入上下文转换成资产列表。"
+            "只返回 JSON 数组。每个元素至少包含 asset_type/title/summary，"
+            "asset_type 只能是：character_card, relationship_card, event_card, open_question, foreshadowing_item, gameplay_hook。"
+        ),
+        user_prompt=json.dumps(
+            {
+                "query": query,
+                "graph_results": graph_results,
+                "text_evidence": text_evidence[:5],
+                "graph_evidence": graph_evidence[:5],
+                "published_asset_refs": (published_asset_refs or [])[:5],
+            },
+            ensure_ascii=False,
+        ),
+        max_output_tokens=700,
+    )
+    if not llm:
+        return None
+    try:
+        parsed = json.loads(llm)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, list):
+        return None
+
+    valid_types = {
+        "character_card",
+        "relationship_card",
+        "event_card",
+        "open_question",
+        "foreshadowing_item",
+        "gameplay_hook",
+    }
+    now = datetime.now(timezone.utc).isoformat()
+    assets: list[BuilderAsset] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        asset_type = str(item.get("asset_type", "")).strip()
+        if asset_type not in valid_types:
+            continue
+        title = str(item.get("title", "")).strip() or f"{asset_type}（LLM）"
+        summary = str(item.get("summary", "")).strip() or "LLM 未给出摘要。"
+        refs = item.get("reference_sources")
+        if not isinstance(refs, list):
+            refs = []
+        refs = [str(ref).strip() for ref in refs if str(ref).strip()][:8]
+        metadata = item.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        assets.append(
+            BuilderAsset(
+                asset_id=f"{asset_type.replace('_', '-')}-{uuid4().hex[:10]}",
+                asset_type=asset_type,
+                type=asset_type,
+                title=title,
+                summary=summary,
+                source_query=query,
+                reference_sources=refs,
+                generated_at=now,
+                metadata={"llm_generated": True, **metadata},
+            )
+        )
+
+    return assets or None
