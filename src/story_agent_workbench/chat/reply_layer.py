@@ -209,6 +209,7 @@ def generate_reply(
     strategy: StrategyConfig,
     route_decision: dict[str, Any],
     memory_turns: list[dict[str, Any]] | None = None,
+    auto_draft: bool = False,
 ) -> dict[str, Any]:
     if memory_turns is None:
         memory_turns = []
@@ -282,6 +283,7 @@ def generate_reply(
                 else None
             )
         ),
+        force_builder=auto_draft,
     )
     reply_text = orchestration.final_reply
 

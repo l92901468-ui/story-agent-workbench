@@ -84,6 +84,18 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("builder", out.agents_called)
         self.assertTrue(any(item.get("type") == "open_question" for item in out.builder_entries))
 
+    def test_builder_trigger_by_force_flag(self) -> None:
+        out = orchestrate_hidden_agents(
+            query="这轮不含整理关键词",
+            mode="chat",
+            base_reply="基础回复",
+            text_evidence=[],
+            graph_evidence=[],
+            graph_results=None,
+            force_builder=True,
+        )
+        self.assertIn("builder", out.agents_called)
+
     @patch("story_agent_workbench.orchestrator.orchestrator.find_relevant_published_assets")
     @patch("story_agent_workbench.orchestrator.orchestrator.load_published_assets")
     def test_published_assets_can_influence_reply(self, mock_load, mock_find) -> None:

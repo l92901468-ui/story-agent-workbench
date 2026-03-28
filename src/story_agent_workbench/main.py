@@ -16,7 +16,7 @@ from story_agent_workbench.strategy import DEFAULT_STRATEGY_PATH, load_strategy_
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Story Agent Workbench (stage-5 strategy layer)")
-    parser.add_argument("query", help="Question or query text")
+    parser.add_argument("query", nargs="?", default="", help="Question or query text")
     parser.add_argument("--top-k", type=int, default=3, help="How many retrieval results to keep")
     parser.add_argument(
         "--mode",
@@ -60,6 +60,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Routing/reply strategy config path",
     )
     parser.add_argument("--json", action="store_true", help="Print full JSON output")
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Run one-window interactive chat loop (type /exit to quit)",
+    )
+    parser.add_argument(
+        "--auto-draft",
+        action="store_true",
+        help="Force builder draft generation on every turn",
+    )
     return parser
 
 
@@ -114,7 +124,6 @@ def format_human_output(payload: dict[str, Any]) -> str:
         lines.append("\n--- published assets referenced (light) ---")
         for item in response["published_asset_refs"][:2]:
             lines.append(f"[{item.get('asset_type')}] {item.get('title')} | {item.get('path')}")
-            lines.append(f"[{item.get('type')}] {item.get('path')}")
 
     text_stats = response.get("text_retrieval", {}).get("stats", {})
     if text_stats.get("extra_files_requested", 0):
@@ -142,10 +151,10 @@ def format_human_output(payload: dict[str, Any]) -> str:
 
 def run_cli(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if not args.interactive and not str(args.query).strip():
+        raise SystemExit("query is required unless --interactive is enabled")
 
     strategy = load_strategy_config(args.strategy_config)
-    route = route_query(args.query, strategy=strategy)
-
     text_config = RetrievalConfig(
         data_root=Path(args.data_root),
         project_id=args.project_id,
@@ -153,6 +162,9 @@ def run_cli(argv: list[str] | None = None) -> int:
         projects_root=Path(args.projects_root),
         chunk_size=args.chunk_size,
         overlap=args.overlap,
+        extra_files=tuple(Path(p) for p in args.test_file),
+        index_path=Path(args.index_path),
+        rebuild_index=args.rebuild_index,
     )
     graph_config = GraphConfig(
         registry_path=Path(args.registry_path),
@@ -160,13 +172,23 @@ def run_cli(argv: list[str] | None = None) -> int:
         project_root=Path(args.project_root) if args.project_root else None,
         projects_root=Path(args.projects_root),
     )
-        chunk_size=args.chunk_size,
-        overlap=args.overlap,
-        extra_files=tuple(Path(p) for p in args.test_file),
-        index_path=Path(args.index_path),
-        rebuild_index=args.rebuild_index,
-    )
-    graph_config = GraphConfig(registry_path=Path(args.registry_path))
+
+    if args.interactive:
+        return run_interactive_chat(
+            initial_query=args.query,
+            mode=args.mode,
+            show_evidence=args.show_evidence,
+            top_k=args.top_k,
+            strategy=strategy,
+            session_id=args.session_id,
+            memory_turns_keep=args.memory_turns,
+            retrieval_config=text_config,
+            graph_config=graph_config,
+            print_json=args.json,
+            auto_draft=args.auto_draft,
+        )
+
+    route = route_query(args.query, strategy=strategy)
 
     memory_turns = load_recent_turns(args.session_id, args.memory_turns)
     response = generate_reply(
@@ -179,6 +201,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         strategy=strategy,
         route_decision=route,
         memory_turns=memory_turns,
+        auto_draft=args.auto_draft,
     )
 
     append_turn(
@@ -198,6 +221,73 @@ def run_cli(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print(format_human_output(payload))
+
+    return 0
+
+
+def run_interactive_chat(
+    *,
+    initial_query: str,
+    mode: str,
+    show_evidence: bool,
+    top_k: int,
+    strategy: Any,
+    session_id: str,
+    memory_turns_keep: int,
+    retrieval_config: RetrievalConfig,
+    graph_config: GraphConfig,
+    print_json: bool,
+    auto_draft: bool,
+) -> int:
+    """Single-window interactive chat loop."""
+
+    print("=== Story Agent Workbench Interactive ===")
+    print("Type /exit to quit.")
+
+    pending_query = initial_query
+    while True:
+        if pending_query.strip():
+            query = pending_query.strip()
+            pending_query = ""
+        else:
+            try:
+                query = input("你> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nBye.")
+                break
+        if not query:
+            continue
+        if query == "/exit":
+            break
+
+        route = route_query(query, strategy=strategy)
+        memory_turns = load_recent_turns(session_id, memory_turns_keep)
+        response = generate_reply(
+            query=query,
+            mode=mode,
+            show_evidence=show_evidence,
+            top_k=top_k,
+            retrieval_config=retrieval_config,
+            graph_config=graph_config,
+            strategy=strategy,
+            route_decision=route,
+            memory_turns=memory_turns,
+            auto_draft=auto_draft,
+        )
+        append_turn(
+            session_id=session_id,
+            mode=response["mode"],
+            user_query=query,
+            assistant_reply=response["reply"],
+            keep_turns=memory_turns_keep,
+        )
+
+        payload = {"route": route, "response": response}
+        if print_json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(format_human_output(payload))
+            print("-" * 60)
 
     return 0
 

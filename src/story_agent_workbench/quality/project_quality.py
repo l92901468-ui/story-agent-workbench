@@ -256,7 +256,7 @@ def _check_faction_chain(registry_factions: list[str], registry_rels: list[tuple
                 QualityIssue(
                     issue_type="faction_chain_gap",
                     summary=f"{faction} 的阵营链条描述可能偏弱",
-                    confidence=0.66 if degree == 0 else 0.55,
+                    confidence=0.66 if degree == 0 else 0.6,
                     reason=f"关系连接数={degree}，文本提及次数={mentions}，可能缺关键连接节点。",
                     related_sources=[doc.get("source", "") for doc in docs if faction in str(doc.get("text", ""))][:3],
                     related_entities=[faction],
