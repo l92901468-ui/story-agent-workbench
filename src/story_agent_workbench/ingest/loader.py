@@ -54,7 +54,6 @@ def discover_text_documents(root_dir: Path | str) -> list[Path]:
         if path.is_file()
         and path.suffix.lower() in SUPPORTED_SUFFIXES
         and not any(part in SYSTEM_DIR_NAMES for part in path.parts)
-        if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
     ]
     return sorted(files)
 
