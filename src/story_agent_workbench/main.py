@@ -173,6 +173,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         projects_root=Path(args.projects_root),
     )
 
+    # Interactive branch keeps one-window loop and bypasses one-shot route/append block below.
     if args.interactive:
         return run_interactive_chat(
             initial_query=args.query,
