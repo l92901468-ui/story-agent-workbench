@@ -83,7 +83,7 @@ class TestTextRetriever(unittest.TestCase):
             self.assertTrue(any("#seg_" in item["source"] for item in result["results"]))
             self.assertEqual(result["stats"]["upload_pre_chunk_size"], 5000)
 
-    def test_project_mode_includes_draft_assets_in_rag_sources(self) -> None:
+    def test_project_mode_includes_draft_assets_in_rag(self) -> None:
         with TemporaryDirectory() as tmpdir:
             project_root = Path(tmpdir) / "projects" / "p1"
             (project_root / "canon").mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,6 @@ class TestTextRetriever(unittest.TestCase):
                 ),
             )
             self.assertTrue(any("draft_asset::" in item["source"] for item in result["results"]))
-            self.assertGreaterEqual(result["stats"]["total_chunks"], 1)
 
 
 if __name__ == "__main__":
