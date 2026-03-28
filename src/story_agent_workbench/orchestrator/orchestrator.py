@@ -38,6 +38,7 @@ def orchestrate_hidden_agents(
     graph_results: dict[str, Any] | None,
     published_root: Path | None = None,
     draft_root: Path | None = None,
+    force_builder: bool = False,
 ) -> OrchestrationResult:
     """Decide which internal roles to call while keeping single front reply."""
 
@@ -53,7 +54,7 @@ def orchestrate_hidden_agents(
 
     needs_critic = mode == "critic" or any(k in query for k in CRITIC_HINTS)
     needs_systems = any(k in query for k in SYSTEMS_HINTS)
-    needs_builder = any(k in query for k in BUILDER_HINTS) or mode == "evidence"
+    needs_builder = force_builder or any(k in query for k in BUILDER_HINTS) or mode == "evidence"
 
     if needs_critic:
         agents_called.append("critic")

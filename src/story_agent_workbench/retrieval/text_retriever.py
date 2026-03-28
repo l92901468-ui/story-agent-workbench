@@ -166,6 +166,17 @@ def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
             )
         )
 
+    for asset in _load_draft_assets_for_rag(root, project_mode=bool(config.project_id or config.project_root)):
+        all_chunks.extend(
+            chunk_text(
+                text=asset["text"],
+                source=asset["source"],
+                layer="draft",
+                chunk_size=config.chunk_size,
+                overlap=config.overlap,
+            )
+        )
+
     for file_path in config.extra_files:
         path = Path(file_path)
         if not path.exists() or not path.is_file():
@@ -201,6 +212,44 @@ def build_chunks(config: RetrievalConfig) -> list[dict[str, Any]]:
     }
 
     return all_chunks
+
+
+def _load_draft_assets_for_rag(root: Path, *, project_mode: bool) -> list[dict[str, str]]:
+    """Load draft asset JSON as additional RAG text sources."""
+
+    candidate_dirs = []
+    if project_mode:
+        candidate_dirs.extend([root / "workbench" / "draft", root / ".workbench" / "assets" / "draft"])
+    else:
+        candidate_dirs.append(Path("data/workbench/draft"))
+
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for base in candidate_dirs:
+        if not base.exists():
+            continue
+        for path in sorted(base.rglob("*.json")):
+            key = str(path.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            parts = [
+                str(payload.get("title", "")).strip(),
+                str(payload.get("summary", "")).strip(),
+                str(payload.get("source_query", "")).strip(),
+                str(payload.get("review_note", "")).strip(),
+            ]
+            text = "\n".join([p for p in parts if p]).strip()
+            if not text:
+                continue
+            out.append({"source": f"draft_asset::{path}", "text": text})
+    return out
 
 
 def _vectorize_text(text: str) -> dict[str, float]:

@@ -44,7 +44,6 @@ class TestOrchestrator(unittest.TestCase):
         mock_persist.return_value = [
             {"type": "character_card", "title": "艾琳 角色卡", "path": "data/workbench/draft/characters/demo.json"}
         ]
-    def test_builder_trigger_by_keyword(self) -> None:
         out = orchestrate_hidden_agents(
             query="请帮我整理成结构化条目",
             mode="chat",
@@ -67,12 +66,6 @@ class TestOrchestrator(unittest.TestCase):
         mock_persist.return_value = [
             {"type": "open_question", "title": "待确认问题", "path": "data/workbench/draft/open_questions/demo.json"}
         ]
-        for entry in out.builder_entries:
-            self.assertIn("type", entry)
-            self.assertIn("title", entry)
-            self.assertIn("content", entry)
-
-    def test_builder_trigger_in_evidence_mode(self) -> None:
         out = orchestrate_hidden_agents(
             query="这轮先不整理",
             mode="evidence",
@@ -83,6 +76,22 @@ class TestOrchestrator(unittest.TestCase):
         )
         self.assertIn("builder", out.agents_called)
         self.assertTrue(any(item.get("type") == "open_question" for item in out.builder_entries))
+        for entry in out.builder_entries:
+            self.assertIn("type", entry)
+            self.assertIn("title", entry)
+            self.assertIn("content", entry)
+
+    def test_builder_trigger_by_force_flag(self) -> None:
+        out = orchestrate_hidden_agents(
+            query="这轮不含整理关键词",
+            mode="chat",
+            base_reply="基础回复",
+            text_evidence=[],
+            graph_evidence=[],
+            graph_results=None,
+            force_builder=True,
+        )
+        self.assertIn("builder", out.agents_called)
 
     @patch("story_agent_workbench.orchestrator.orchestrator.find_relevant_published_assets")
     @patch("story_agent_workbench.orchestrator.orchestrator.load_published_assets")
