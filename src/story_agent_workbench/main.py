@@ -49,6 +49,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Persistent local retrieval index path",
     )
     parser.add_argument(
+        "--legacy-index-path",
+        default=None,
+        help="Optional legacy RAG index path (used with --new-index-path)",
+    )
+    parser.add_argument(
+        "--new-index-path",
+        default=None,
+        help="Optional new RAG index path (used with --legacy-index-path)",
+    )
+    parser.add_argument(
+        "--rag-policy",
+        choices=["single", "legacy", "new", "merge", "auto"],
+        default="single",
+        help="RAG index policy: single(default), or dual-index policy legacy/new/merge/auto",
+    )
+    parser.add_argument(
         "--rebuild-index",
         action="store_true",
         help="Rebuild persistent index from current data-root and --test-file inputs",
@@ -154,6 +170,9 @@ def run_cli(argv: list[str] | None = None) -> int:
         overlap=args.overlap,
         extra_files=tuple(Path(p) for p in args.test_file),
         index_path=Path(args.index_path),
+        legacy_index_path=Path(args.legacy_index_path) if args.legacy_index_path else None,
+        new_index_path=Path(args.new_index_path) if args.new_index_path else None,
+        rag_policy=args.rag_policy,
         rebuild_index=args.rebuild_index,
     )
     graph_config = GraphConfig(

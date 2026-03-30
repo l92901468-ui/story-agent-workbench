@@ -32,6 +32,9 @@ class RetrievalConfig:
     extra_files: tuple[Path, ...] = ()
     extra_layer: str = "test_input"
     index_path: Path = Path("data/workbench/index/text_index.json")
+    legacy_index_path: Path | None = None
+    new_index_path: Path | None = None
+    rag_policy: str = "single"
     rebuild_index: bool = False
 
 
@@ -333,6 +336,71 @@ def _upsert_chunks_to_index(index_data: dict[str, Any], chunks: list[dict[str, A
     return inserted, updated
 
 
+def _score_indexed_chunks(indexed_chunks: list[dict[str, Any]], query: str, *, rag_source: str) -> list[dict[str, Any]]:
+    query_vector = _vectorize_text(query)
+    scored_results: list[dict[str, Any]] = []
+    for chunk in indexed_chunks:
+        lexical_score = score_chunk(query, str(chunk.get("text", "")))
+        vector_score = _cosine_sim(query_vector, chunk.get("vector", {}))
+        score = lexical_score + vector_score
+        if score <= 0:
+            continue
+
+        scored_results.append(
+            {
+                "source": chunk["source"],
+                "chunk_id": chunk["chunk_id"],
+                "layer": chunk["layer"],
+                "text": chunk["text"],
+                "score": round(score, 3),
+                "rag_source": rag_source,
+            }
+        )
+    return scored_results
+
+
+def _retrieve_from_single_index(
+    *,
+    query: str,
+    chunks: list[dict[str, Any]],
+    index_path: Path,
+    rebuild_index: bool,
+    rag_source: str,
+) -> dict[str, Any]:
+    index_data = _load_persistent_index(index_path)
+    if rebuild_index:
+        index_data = {"chunks": []}
+
+    inserted, updated = _upsert_chunks_to_index(index_data, chunks)
+    _save_persistent_index(index_path, index_data.get("chunks", []))
+    indexed_chunks = index_data.get("chunks", [])
+    scored_results = _score_indexed_chunks(indexed_chunks, query, rag_source=rag_source)
+
+    return {
+        "index_path": str(index_path),
+        "indexed_chunks": len(indexed_chunks),
+        "inserted": inserted,
+        "updated": updated,
+        "scored_results": scored_results,
+    }
+
+
+def _pick_dual_policy(query: str, requested_policy: str) -> str:
+    if requested_policy in {"legacy", "new", "merge"}:
+        return requested_policy
+    if requested_policy != "auto":
+        return "merge"
+
+    lowered = query.lower()
+    legacy_hints = ("历史", "旧", "legacy", "过去", "之前")
+    new_hints = ("新增", "最新", "new", "recent", "刚才", "本轮")
+    if any(h in lowered for h in legacy_hints):
+        return "legacy"
+    if any(h in lowered for h in new_hints):
+        return "new"
+    return "merge"
+
+
 def retrieve_text(
     *,
     query: str,
@@ -351,34 +419,72 @@ def retrieve_text(
         config = RetrievalConfig()
 
     chunks = build_chunks(config)
-    index_path = resolve_index_path(config)
-    index_data = _load_persistent_index(index_path)
-    if config.rebuild_index:
-        index_data = {"chunks": []}
 
-    inserted, updated = _upsert_chunks_to_index(index_data, chunks)
-    _save_persistent_index(index_path, index_data.get("chunks", []))
-
-    indexed_chunks = index_data.get("chunks", [])
-    query_vector = _vectorize_text(query)
-
+    use_dual_index = bool(config.legacy_index_path and config.new_index_path)
+    selected_policy = "single"
     scored_results: list[dict[str, Any]] = []
-    for chunk in indexed_chunks:
-        lexical_score = score_chunk(query, str(chunk.get("text", "")))
-        vector_score = _cosine_sim(query_vector, chunk.get("vector", {}))
-        score = lexical_score + vector_score
-        if score <= 0:
-            continue
+    index_stats: dict[str, Any] = {}
 
-        scored_results.append(
-            {
-                "source": chunk["source"],
-                "chunk_id": chunk["chunk_id"],
-                "layer": chunk["layer"],
-                "text": chunk["text"],
-                "score": round(score, 3),
-            }
+    if use_dual_index:
+        selected_policy = _pick_dual_policy(query, config.rag_policy)
+        legacy_info = _retrieve_from_single_index(
+            query=query,
+            chunks=chunks,
+            index_path=config.legacy_index_path or Path(""),
+            rebuild_index=config.rebuild_index,
+            rag_source="legacy",
         )
+        new_info = _retrieve_from_single_index(
+            query=query,
+            chunks=chunks,
+            index_path=config.new_index_path or Path(""),
+            rebuild_index=config.rebuild_index,
+            rag_source="new",
+        )
+
+        if selected_policy == "legacy":
+            scored_results = legacy_info["scored_results"]
+        elif selected_policy == "new":
+            scored_results = new_info["scored_results"]
+        else:
+            merged = legacy_info["scored_results"] + new_info["scored_results"]
+            by_source_chunk: dict[tuple[str, str], dict[str, Any]] = {}
+            for item in merged:
+                key = (str(item.get("source", "")), str(item.get("chunk_id", "")))
+                current = by_source_chunk.get(key)
+                if current is None or item["score"] > current["score"]:
+                    by_source_chunk[key] = item
+            scored_results = list(by_source_chunk.values())
+
+        index_stats = {
+            "policy_requested": config.rag_policy,
+            "policy_selected": selected_policy,
+            "legacy_index_path": legacy_info["index_path"],
+            "legacy_chunks_total": legacy_info["indexed_chunks"],
+            "legacy_chunks_inserted": legacy_info["inserted"],
+            "legacy_chunks_updated": legacy_info["updated"],
+            "new_index_path": new_info["index_path"],
+            "new_chunks_total": new_info["indexed_chunks"],
+            "new_chunks_inserted": new_info["inserted"],
+            "new_chunks_updated": new_info["updated"],
+        }
+    else:
+        index_path = resolve_index_path(config)
+        single_info = _retrieve_from_single_index(
+            query=query,
+            chunks=chunks,
+            index_path=index_path,
+            rebuild_index=config.rebuild_index,
+            rag_source="single",
+        )
+        scored_results = single_info["scored_results"]
+        index_stats = {
+            "index_path": single_info["index_path"],
+            "total_chunks": single_info["indexed_chunks"],
+            "index_chunks_inserted": single_info["inserted"],
+            "index_chunks_updated": single_info["updated"],
+            "policy_selected": "single",
+        }
 
     scored_results.sort(key=lambda item: item["score"], reverse=True)
     top_results = scored_results[: max(top_k, 0)]
@@ -394,11 +500,8 @@ def retrieve_text(
         "results": top_results,
         "evidence": evidence,
         "stats": {
-            "total_chunks": len(indexed_chunks),
             "matched_chunks": len(scored_results),
-            "index_path": str(index_path),
-            "index_chunks_inserted": inserted,
-            "index_chunks_updated": updated,
+            **index_stats,
             **getattr(build_chunks, "last_build_stats", {}),
         },
     }

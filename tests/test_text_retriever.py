@@ -61,6 +61,98 @@ class TestTextRetriever(unittest.TestCase):
         self.assertEqual(len(chunks[1]), 5000)
         self.assertEqual(len(chunks[2]), 2050)
 
+    def test_dual_index_merge_policy_reads_legacy_and_new(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            legacy_file = tmp / "legacy_only.txt"
+            new_file = tmp / "new_only.txt"
+            legacy_file.write_text("遗迹线索只在旧库里。", encoding="utf-8")
+            new_file.write_text("新设定条目只在新库里。", encoding="utf-8")
+
+            legacy_index = tmp / "legacy" / "text_index.json"
+            new_index = tmp / "new" / "text_index.json"
+
+            retrieve_text(
+                query="遗迹线索",
+                top_k=2,
+                config=RetrievalConfig(
+                    data_root=tmp / "missing_root",
+                    extra_files=(legacy_file,),
+                    index_path=legacy_index,
+                    rebuild_index=True,
+                ),
+            )
+            retrieve_text(
+                query="新设定条目",
+                top_k=2,
+                config=RetrievalConfig(
+                    data_root=tmp / "missing_root",
+                    extra_files=(new_file,),
+                    index_path=new_index,
+                    rebuild_index=True,
+                ),
+            )
+
+            merged = retrieve_text(
+                query="线索 条目",
+                top_k=5,
+                config=RetrievalConfig(
+                    data_root=tmp / "missing_root",
+                    legacy_index_path=legacy_index,
+                    new_index_path=new_index,
+                    rag_policy="merge",
+                ),
+            )
+            sources = {item.get("rag_source") for item in merged["results"]}
+            self.assertIn("legacy", sources)
+            self.assertIn("new", sources)
+            self.assertEqual(merged["stats"]["policy_selected"], "merge")
+
+    def test_dual_index_auto_policy_can_pick_new(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            legacy_file = tmp / "legacy_only.txt"
+            new_file = tmp / "new_only.txt"
+            legacy_file.write_text("旧世界观条目。", encoding="utf-8")
+            new_file.write_text("最新角色设定。", encoding="utf-8")
+
+            legacy_index = tmp / "legacy" / "text_index.json"
+            new_index = tmp / "new" / "text_index.json"
+
+            retrieve_text(
+                query="旧世界观",
+                top_k=2,
+                config=RetrievalConfig(
+                    data_root=tmp / "missing_root",
+                    extra_files=(legacy_file,),
+                    index_path=legacy_index,
+                    rebuild_index=True,
+                ),
+            )
+            retrieve_text(
+                query="最新角色设定",
+                top_k=2,
+                config=RetrievalConfig(
+                    data_root=tmp / "missing_root",
+                    extra_files=(new_file,),
+                    index_path=new_index,
+                    rebuild_index=True,
+                ),
+            )
+
+            out = retrieve_text(
+                query="最新版本应该怎么写",
+                top_k=3,
+                config=RetrievalConfig(
+                    data_root=tmp / "missing_root",
+                    legacy_index_path=legacy_index,
+                    new_index_path=new_index,
+                    rag_policy="auto",
+                ),
+            )
+            self.assertEqual(out["stats"]["policy_selected"], "new")
+            self.assertTrue(all(item.get("rag_source") == "new" for item in out["results"]))
+
     @patch("story_agent_workbench.retrieval.text_retriever._llm_refine_upload_chunks")
     def test_retrieve_with_ad_hoc_file_uses_llm_refined_segments(self, mock_refine) -> None:
         with TemporaryDirectory() as tmpdir:

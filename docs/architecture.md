@@ -140,6 +140,7 @@
 - 当前状态：
   - 已实现最小关键词打分检索（阶段 3）
   - 已支持本地持久化索引（JSON）以跨运行复用 chunk
+  - 已支持双索引策略（legacy/new/merge/auto）以兼容旧库与新库并行检索
   - 可接入临时测试文件（`--test-file`），并在本轮直接参与检索
   - 返回结果包含 `source/chunk_id/layer/text/score` 与 evidence
 
