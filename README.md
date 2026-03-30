@@ -142,38 +142,6 @@ PYTHONPATH=src python -m story_agent_workbench "这段要对齐最新设定" \
 
 `--rag-policy` 可选：`single`（默认）/ `legacy` / `new` / `merge` / `auto`。
 
-策略说明（双索引模式）：
-
-- `legacy`：只查旧索引
-- `new`：只查新索引
-- `merge`：两边都查并合并结果
-- `auto`：按问题关键词自动选（命中“历史/旧/legacy”等倾向 `legacy`；命中“新增/最新/new”等倾向 `new`；其余走 `merge`）
-
-> 提示：只有同时提供 `--legacy-index-path` 和 `--new-index-path` 时才会启用双索引策略；否则仍按单索引运行。
-
-连续多轮聊天（同一会话）并持续把聊天记录作为 RAG 测试输入：
-
-```bash
-# 第 1 轮
-PYTHONPATH=src python -m story_agent_workbench "先讨论这一章冲突线" \
-  --session-id live_demo \
-  --legacy-index-path /path/to/legacy_index.json \
-  --new-index-path /path/to/new_index.json \
-  --rag-policy auto \
-  --test-file /path/to/chat_log.txt
-
-# 第 2 轮（沿用同一个 session-id 和 chat_log）
-PYTHONPATH=src python -m story_agent_workbench "再给我两个改写建议" \
-  --mode feedback \
-  --session-id live_demo \
-  --legacy-index-path /path/to/legacy_index.json \
-  --new-index-path /path/to/new_index.json \
-  --rag-policy auto \
-  --test-file /path/to/chat_log.txt
-```
-
-如果你想查看后台调用了哪些内部角色（multi-agent 编排结果），建议加 `--json` 并查看 `response.agents_called` 字段。
-
 首次重建索引可加：
 
 ```bash
