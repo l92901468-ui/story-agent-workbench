@@ -1,0 +1,105 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f5f7fb;
+  color: #1f2430;
+}
+
+.container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1,
+h2 {
+  margin: 0 0 8px;
+}
+
+.sub,
+.status {
+  color: #596579;
+  margin-top: 0;
+}
+
+.ask-box {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
+  border: 1px solid #d6dceb;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 14px;
+}
+
+button {
+  width: 140px;
+  border: 0;
+  border-radius: 8px;
+  background: #376cff;
+  color: #fff;
+  padding: 10px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.drafts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.draft-item,
+.chat,
+.final {
+  background: #fff;
+  border: 1px solid #dfe4f0;
+  border-radius: 12px;
+}
+
+.draft-item {
+  padding: 10px;
+}
+
+.draft-item h3 {
+  margin: 0 0 6px;
+  color: #2d3f6b;
+}
+
+.chat {
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.msg {
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f1f4fa;
+}
+
+.msg .agent {
+  font-weight: 700;
+  color: #2d3f6b;
+  margin-right: 8px;
+}
+
+.final {
+  white-space: pre-wrap;
+  padding: 12px;
+  min-height: 80px;
+}

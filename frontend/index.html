@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>研学协同引擎</title>
+    <link rel="stylesheet" href="/frontend/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>研学协同群</h1>
+      <p class="sub">输入问题后，系统会自动组织协同讨论并输出最终方案。</p>
+
+      <section class="ask-box">
+        <textarea id="question" placeholder="例如：给初二设计‘博物馆+城市观察’两天一夜研学方案"></textarea>
+        <button id="runBtn">启动协同</button>
+      </section>
+
+      <section>
+        <h2>状态</h2>
+        <p id="status" class="status">待命中</p>
+      </section>
+
+      <section>
+        <h2>检索摘要</h2>
+        <ul id="retrieval"></ul>
+      </section>
+
+      <section>
+        <h2>五维草案</h2>
+        <div id="drafts" class="drafts"></div>
+      </section>
+
+      <section>
+        <h2>协同沟通</h2>
+        <div id="chat" class="chat"></div>
+      </section>
+
+      <section>
+        <h2>最终方案</h2>
+        <pre id="finalPlan" class="final"></pre>
+      </section>
+    </main>
+
+    <script src="/frontend/app.js"></script>
+  </body>
+</html>

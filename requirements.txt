@@ -1,0 +1,11 @@
+fastapi==0.116.0
+uvicorn==0.35.0
+requests==2.32.4
+pytest==8.4.1
+httpx==0.28.1
+# 之前写的是 volcengine-python-sdk==4.0.19，那个包只提供 volcenginesdk* 各业务子包，
+# 并不包含代码实际用到的 volcengine.Credentials / auth.SignerV4 / base.Request，
+# 所以装完依然 ImportError。真正需要的是下面这个基础包。
+# 只有「配置了 VOLC_AK/VOLC_SK 要真正调火山」时才需要它。
+# 不开火山、只跑本地模拟的话不装也能启动、跑测试（请求对象会退回内置的最小实现）。
+volcengine==1.0.228
